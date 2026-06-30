@@ -16,7 +16,14 @@ st.set_page_config(
     layout="centered",
 )
 
-database.init_db()
+try:
+    database.init_db()
+except Exception as _db_err:
+    st.error(
+        f"⚠️ Database initialization failed: {_db_err}. "
+        "Please reload the page. If the issue persists, contact the developer."
+    )
+    st.stop()  # Safe — st.stop() here is BEFORE any tab is rendered.
 
 
 # ── PWA: Mobile Web App Manifest ──────────────────────────────────────────────
@@ -113,160 +120,59 @@ tab_insights, tab_quicklog, tab_setup = st.tabs([
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_insights:
     if not profile:
-        st.info(
-            "👋 Set up your **Lifestyle Profile** first so we can calculate "
-            "your macro targets and show your progress here."
+        # ── Welcome state: fresh cloud container, no profile yet ───────────────
+        with st.container(border=True):
+            st.markdown("### 👋 Selamat datang di Gendutin!")
+            st.write(
+                "Sepertinya ini pertama kali Anda menggunakan app ini. "
+                "Buka tab **👤 Lifestyle Setup** untuk mengisi data fisik dan "
+                "gaya hidup Anda — Gemini akan menghitung target kalori secara otomatis."
+            )
+            st.info(
+                "💡 Setelah profil tersimpan, kembali ke tab ini untuk melihat "
+                "grafik progres **Harian**, **Mingguan**, dan **Bulanan** Anda."
+            )
+    else:
+        t_cal  = profile["target_calories"]
+        t_prot = profile["target_protein"]
+        t_carb = profile["target_carbs"]
+        t_fat  = profile["target_fat"]
+        today  = datetime.date.today()
+
+        # ── Period selector ───────────────────────────────────────────────────────
+        period = st.radio(
+            "Periode:", ["Harian 📅", "Mingguan 📆", "Bulanan 🗓️"],
+            horizontal=True, key="period_selector", label_visibility="collapsed",
         )
-        st.stop()
+        st.divider()
 
-    t_cal  = profile["target_calories"]
-    t_prot = profile["target_protein"]
-    t_carb = profile["target_carbs"]
-    t_fat  = profile["target_fat"]
-    today  = datetime.date.today()
+        # ═══════════════════════ HARIAN ══════════════════════════════════════════
+        if period == "Harian 📅":
+            selected_date = st.date_input(
+                "Tanggal:", today, label_visibility="collapsed"
+            ).strftime("%Y-%m-%d")
 
-    # ── Period selector ───────────────────────────────────────────────────────
-    period = st.radio(
-        "Periode:", ["Harian 📅", "Mingguan 📆", "Bulanan 🗓️"],
-        horizontal=True, key="period_selector", label_visibility="collapsed",
-    )
-    st.divider()
+            logs       = database.get_daily_logs(selected_date)
+            total_cal  = sum(l["calories"] for l in logs)
+            total_prot = sum(l["protein"]  for l in logs)
+            total_carb = sum(l["carbs"]    for l in logs)
+            total_fat  = sum(l["fat"]      for l in logs)
+            remaining  = max(0.0, t_cal - total_cal)
+            pct        = min(1.0, total_cal / t_cal) if t_cal > 0 else 0.0
 
-    # ═══════════════════════ HARIAN ══════════════════════════════════════════
-    if period == "Harian 📅":
-        selected_date = st.date_input(
-            "Tanggal:", today, label_visibility="collapsed"
-        ).strftime("%Y-%m-%d")
-
-        logs       = database.get_daily_logs(selected_date)
-        total_cal  = sum(l["calories"] for l in logs)
-        total_prot = sum(l["protein"]  for l in logs)
-        total_carb = sum(l["carbs"]    for l in logs)
-        total_fat  = sum(l["fat"]      for l in logs)
-        remaining  = max(0.0, t_cal - total_cal)
-        pct        = min(1.0, total_cal / t_cal) if t_cal > 0 else 0.0
-
-        # Hero progress card
-        with st.container(border=True):
-            st.markdown(f"### 🔥 {total_cal:.0f} / {t_cal:.0f} kkal")
-            st.progress(pct)
-            delta_val = total_cal - t_cal
-            st.caption(
-                f"**{pct*100:.1f}% tercapai** &nbsp;·&nbsp; "
-                f"Sisa: **{remaining:.0f} kkal** &nbsp;·&nbsp; "
-                f"Delta: {'%+.0f' % delta_val} kkal"
-            )
-
-        # 2×2 macro metric cards
-        mc1, mc2 = st.columns(2)
-        with mc1:
+            # Hero progress card
             with st.container(border=True):
-                st.metric("🥩 Protein", f"{total_prot:.1f}g",
-                          delta=f"{total_prot - t_prot:+.1f}g", delta_color="inverse")
-        with mc2:
-            with st.container(border=True):
-                st.metric("🍞 Karbo", f"{total_carb:.1f}g",
-                          delta=f"{total_carb - t_carb:+.1f}g", delta_color="inverse")
-        mc3, mc4 = st.columns(2)
-        with mc3:
-            with st.container(border=True):
-                st.metric("🥑 Lemak", f"{total_fat:.1f}g",
-                          delta=f"{total_fat - t_fat:+.1f}g", delta_color="inverse")
-        with mc4:
-            with st.container(border=True):
-                st.metric("🎯 Sisa", f"{remaining:.0f} kkal")
+                st.markdown(f"### 🔥 {total_cal:.0f} / {t_cal:.0f} kkal")
+                st.progress(pct)
+                delta_val = total_cal - t_cal
+                st.caption(
+                    f"**{pct*100:.1f}% tercapai** &nbsp;·&nbsp; "
+                    f"Sisa: **{remaining:.0f} kkal** &nbsp;·&nbsp; "
+                    f"Delta: {'%+.0f' % delta_val} kkal"
+                )
 
-        # Macro bar chart (collapsible to save space)
-        with st.expander("📊 Grafik Makro Harian"):
-            _plot_macro_bar(
-                targets=[t_prot,     t_carb,     t_fat],
-                consumed=[total_prot, total_carb, total_fat],
-                labels=["Protein", "Karbo", "Lemak"],
-            )
-
-    # ═══════════════════════ MINGGUAN ════════════════════════════════════════
-    elif period == "Mingguan 📆":
-        dates = [
-            (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-            for i in range(6, -1, -1)
-        ]
-        daily_data = []
-        for d in dates:
-            logs_d = database.get_daily_logs(d)
-            daily_data.append({
-                "date":     d,
-                "label":    datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a %d"),
-                "calories": sum(l["calories"] for l in logs_d),
-                "protein":  sum(l["protein"]  for l in logs_d),
-                "carbs":    sum(l["carbs"]    for l in logs_d),
-                "fat":      sum(l["fat"]      for l in logs_d),
-            })
-        df       = pd.DataFrame(daily_data)
-        avg_cal  = df["calories"].mean()
-        hari_aktif = int((df["calories"] > 0).sum())
-
-        # Weekly summary card
-        with st.container(border=True):
-            st.markdown("### 📆 7 Hari Terakhir")
-            wc1, wc2 = st.columns(2)
-            wc1.metric("Rata-rata Kalori", f"{avg_cal:.0f} kkal",
-                       delta=f"{avg_cal - t_cal:+.0f} vs target", delta_color="inverse")
-            wc2.metric("Hari Aktif Log", f"{hari_aktif} / 7 hari")
-
-        wa1, wa2 = st.columns(2)
-        with wa1:
-            with st.container(border=True):
-                st.metric("🥩 Avg Protein", f"{df['protein'].mean():.1f}g")
-        with wa2:
-            with st.container(border=True):
-                st.metric("🍞 Avg Karbo", f"{df['carbs'].mean():.1f}g")
-
-        # Weekly calorie bar chart with target dashed line
-        plt.style.use("seaborn-v0_8-whitegrid")
-        fig, ax = plt.subplots(figsize=(5, 3))
-        fig.patch.set_alpha(0)
-        ax.set_facecolor("none")
-        colors = ["#3B7DD8" if c > 0 else "#E2E8F0" for c in df["calories"]]
-        ax.bar(df["label"], df["calories"], color=colors, alpha=0.9, width=0.6)
-        ax.axhline(t_cal, color="#94A3B8", linestyle="--", linewidth=1.5,
-                   label=f"Target {t_cal:.0f} kkal")
-        ax.set_ylabel("Kalori (kkal)", fontsize=9)
-        ax.tick_params(axis="x", labelsize=8, rotation=25)
-        ax.tick_params(axis="y", labelsize=8)
-        ax.legend(frameon=False, fontsize=8)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        plt.tight_layout()
-        st.pyplot(fig)
-
-    # ═══════════════════════ BULANAN ═════════════════════════════════════════
-    elif period == "Bulanan 🗓️":
-        dates = [
-            (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-            for i in range(29, -1, -1)
-        ]
-        daily_data = []
-        for d in dates:
-            logs_d = database.get_daily_logs(d)
-            daily_data.append({"date": d, "calories": sum(l["calories"] for l in logs_d)})
-
-        df          = pd.DataFrame(daily_data)
-        df["date"]  = pd.to_datetime(df["date"])
-        avg_cal     = df["calories"].mean()
-        active_days = int((df["calories"] > 0).sum())
-
-        # Monthly summary card
-        with st.container(border=True):
-            st.markdown("### 🗓️ 30 Hari Terakhir")
+            # 2×2 macro metric cards
             mc1, mc2 = st.columns(2)
-            mc1.metric("Rata-rata Kalori", f"{avg_cal:.0f} kkal",
-                       delta=f"{avg_cal - t_cal:+.0f} vs target", delta_color="inverse")
-            mc2.metric("Hari Aktif Log", f"{active_days} / 30 hari")
-
-        # Monthly filled area line chart
-        plt.style.use("seaborn-v0_8-whitegrid")
-        fig, ax = plt.subplots(figsize=(5, 3))
-        fig.patch.set_alpha(0)
         ax.set_facecolor("none")
         ax.fill_between(df["date"], df["calories"], alpha=0.12, color="#3B7DD8")
         ax.plot(df["date"], df["calories"], color="#3B7DD8", linewidth=2)
@@ -298,155 +204,160 @@ with tab_insights:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_quicklog:
     if not profile:
-        st.info("👋 Set up your profile in **👤 Lifestyle Setup** first.")
-        st.stop()
-
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    logs      = database.get_daily_logs(today_str)
-    total_cal = sum(l["calories"] for l in logs)
-    t_cal     = profile["target_calories"]
-    remaining = max(0.0, t_cal - total_cal)
-    pct       = min(1.0, total_cal / t_cal) if t_cal > 0 else 0.0
-
-    # Compact progress banner (not obtrusive — just a status line)
-    with st.container(border=True):
-        st.caption(
-            f"Hari ini: **{total_cal:.0f} / {t_cal:.0f} kkal** "
-            f"&nbsp;·&nbsp; Sisa: **{remaining:.0f} kkal**"
-        )
-        st.progress(pct)
-
-    # ── AI Food Entry — single free-form text, zero dropdowns ─────────────────
-    st.subheader("🍕 Apa yang kamu makan?")
-
-    if not status["configured"]:
-        st.warning(
-            "⚠️ Tambahkan `GEMINI_API_KEY` di file `.env` "
-            "untuk mengaktifkan AI food logging."
-        )
+        # ── Welcome state: guide user to setup tab ───────────────────────────
+        with st.container(border=True):
+            st.markdown("### 🍕 Siap mencatat makanan?")
+            st.write(
+                "Profil Anda belum diisi. Buka tab **👤 Lifestyle Setup** terlebih "
+                "dahulu agar kami bisa menghitung target kalori harianmu secara akurat."
+            )
     else:
-        food_input = st.text_input(
-            "Deskripsikan makanan atau minuman:",
-            placeholder="cth: semangkuk bakso sapi isi 10 biji + es teh manis",
-            key="quicklog_input",
-            label_visibility="collapsed",
-        )
+        today_str = datetime.date.today().strftime("%Y-%m-%d")
+        logs      = database.get_daily_logs(today_str)
+        total_cal = sum(l["calories"] for l in logs)
+        t_cal     = profile["target_calories"]
+        remaining = max(0.0, t_cal - total_cal)
+        pct       = min(1.0, total_cal / t_cal) if t_cal > 0 else 0.0
 
-        if st.button("✨ Analisis & Estimasi via Gemini", type="primary", use_container_width=True):
-            if not food_input.strip():
-                st.warning("Tulis dulu makanan atau minuman Anda di atas.")
-            else:
-                with st.spinner("Gemini sedang menganalisis kandungan gizi makanan Anda..."):
-                    result = ai_client.estimate_food_nutrition(food_input)
-                if result:
-                    st.session_state.ai_preview = result
+        # Compact progress banner
+        with st.container(border=True):
+            st.caption(
+                f"Hari ini: **{total_cal:.0f} / {t_cal:.0f} kkal** "
+                f"&nbsp;·&nbsp; Sisa: **{remaining:.0f} kkal**"
+            )
+            st.progress(pct)
+
+        # ── AI Food Entry — single free-form text, zero dropdowns ─────────────
+        st.subheader("🍕 Apa yang kamu makan?")
+
+        if not status["configured"]:
+            st.warning(
+                "⚠️ Tambahkan `GEMINI_API_KEY` di file `.env` "
+                "untuk mengaktifkan AI food logging."
+            )
+        else:
+            food_input = st.text_input(
+                "Deskripsikan makanan atau minuman:",
+                placeholder="cth: semangkuk bakso sapi isi 10 biji + es teh manis",
+                key="quicklog_input",
+                label_visibility="collapsed",
+            )
+
+            if st.button("✨ Analisis & Estimasi via Gemini", type="primary", use_container_width=True):
+                if not food_input.strip():
+                    st.warning("Tulis dulu makanan atau minuman Anda di atas.")
                 else:
-                    st.error(
-                        "⚠️ Gagal mengestimasi. Coba deskripsikan lebih detail "
-                        "atau periksa koneksi internet Anda."
-                    )
+                    with st.spinner("Gemini sedang menganalisis kandungan gizi makanan Anda..."):
+                        result = ai_client.estimate_food_nutrition(food_input)
+                    if result:
+                        st.session_state.ai_preview = result
+                    else:
+                        st.error(
+                            "⚠️ Gagal mengestimasi. Coba deskripsikan lebih detail "
+                            "atau periksa koneksi internet Anda."
+                        )
 
-        # ── AI Preview card ────────────────────────────────────────────────────
-        if st.session_state.ai_preview:
-            r = st.session_state.ai_preview
-            with st.container(border=True):
-                st.success(f"**{r['food_name']}**")
-                st.caption(f"_{r['serving_description']}_")
-                p1, p2 = st.columns(2)
-                p1.metric("🔥 Kalori",      f"{r['calories']:.0f} kkal")
-                p2.metric("🥩 Protein",     f"{r['protein_g']:.1f} g")
-                p3, p4 = st.columns(2)
-                p3.metric("🍞 Karbohidrat", f"{r['carbs_g']:.1f} g")
-                p4.metric("🥑 Lemak",        f"{r['fat_g']:.1f} g")
+            # ── AI Preview card ────────────────────────────────────────────────
+            if st.session_state.ai_preview:
+                r = st.session_state.ai_preview
+                with st.container(border=True):
+                    st.success(f"**{r['food_name']}**")
+                    st.caption(f"_{r['serving_description']}_")
+                    p1, p2 = st.columns(2)
+                    p1.metric("🔥 Kalori",      f"{r['calories']:.0f} kkal")
+                    p2.metric("🥩 Protein",     f"{r['protein_g']:.1f} g")
+                    p3, p4 = st.columns(2)
+                    p3.metric("🍞 Karbohidrat", f"{r['carbs_g']:.1f} g")
+                    p4.metric("🥑 Lemak",        f"{r['fat_g']:.1f} g")
 
-                bc1, bc2 = st.columns(2)
-                if bc1.button("✅ Catat Sekarang", type="primary", use_container_width=True):
-                    database.add_custom_food(
-                        r["food_name"], r["calories"],
-                        r["protein_g"], r["carbs_g"], r["fat_g"], "AI Entry"
-                    )
-                    conn   = database.get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT id FROM foods WHERE name = ?", (r["food_name"],))
-                    row    = cursor.fetchone()
-                    conn.close()
-                    if row:
-                        database.log_food_consumption(today_str, row["id"], 1.0)
+                    bc1, bc2 = st.columns(2)
+                    if bc1.button("✅ Catat Sekarang", type="primary", use_container_width=True):
+                        database.add_custom_food(
+                            r["food_name"], r["calories"],
+                            r["protein_g"], r["carbs_g"], r["fat_g"], "AI Entry"
+                        )
+                        conn   = database.get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT id FROM foods WHERE name = ?", (r["food_name"],))
+                        row    = cursor.fetchone()
+                        conn.close()
+                        if row:
+                            database.log_food_consumption(today_str, row["id"], 1.0)
+                            st.session_state.ai_preview = None
+                            st.rerun()
+                        else:
+                            st.error("Gagal menyimpan ke database. Coba lagi.")
+
+                    if bc2.button("✖ Batal", use_container_width=True):
                         st.session_state.ai_preview = None
                         st.rerun()
-                    else:
-                        st.error("Gagal menyimpan ke database. Coba lagi.")
 
-                if bc2.button("✖ Batal", use_container_width=True):
-                    st.session_state.ai_preview = None
-                    st.rerun()
+        st.divider()
 
-    st.divider()
-
-    # ── Today's stacked log — one card per item, delete below each ────────────
-    st.subheader("📋 Log Hari Ini")
-    if logs:
-        for log in logs:
-            with st.container(border=True):
-                st.markdown(f"**{log['food_name']}** &nbsp;×&nbsp; {log['quantity']:.1f}")
-                st.caption(
-                    f"🔥 {log['calories']:.0f} kkal &nbsp;·&nbsp; "
-                    f"🥩 {log['protein']:.1f}g &nbsp;·&nbsp; "
-                    f"🍞 {log['carbs']:.1f}g &nbsp;·&nbsp; "
-                    f"🥑 {log['fat']:.1f}g"
-                )
-                if st.button("🗑️ Hapus", key=f"del_{log['id']}", use_container_width=True):
-                    database.delete_daily_log(log["id"])
-                    st.rerun()
-    else:
-        st.info("Belum ada catatan hari ini. Gunakan input di atas untuk memulai.")
-
-    st.divider()
-
-    # ── AI Bulking Advisor ────────────────────────────────────────────────────
-    with st.expander("🤖 Saran Bulking dari Gemini"):
-        if not status["configured"]:
-            st.warning("⚠️ Perlu `GEMINI_API_KEY` di file `.env`.")
+        # ── Today's stacked log — one card per item, delete below each ────────
+        st.subheader("📋 Log Hari Ini")
+        if logs:
+            for log in logs:
+                with st.container(border=True):
+                    st.markdown(f"**{log['food_name']}** &nbsp;×&nbsp; {log['quantity']:.1f}")
+                    st.caption(
+                        f"🔥 {log['calories']:.0f} kkal &nbsp;·&nbsp; "
+                        f"🥩 {log['protein']:.1f}g &nbsp;·&nbsp; "
+                        f"🍞 {log['carbs']:.1f}g &nbsp;·&nbsp; "
+                        f"🥑 {log['fat']:.1f}g"
+                    )
+                    if st.button("🗑️ Hapus", key=f"del_{log['id']}", use_container_width=True):
+                        database.delete_daily_log(log["id"])
+                        st.rerun()
         else:
-            st.caption(f"Defisit hari ini: **{remaining:.0f} kkal**")
-            if profile.get("likes_text"):
-                st.caption(
-                    f"🟢 Preferensi Anda: "
-                    f"_{profile['likes_text'][:70]}{'...' if len(profile.get('likes_text','')) > 70 else ''}_"
-                )
-            if st.button("✨ Generate Saran Personal", type="primary",
-                         use_container_width=True, key="advisor_btn"):
-                if remaining <= 50:
-                    st.success("🎉 Target kalori hampir terpenuhi hari ini! Pertahankan.")
-                else:
-                    with st.spinner("Gemini menyusun rekomendasi personal untuk Anda..."):
-                        advice = ai_client.get_bulking_advice(
-                            deficit_kcal=remaining,
-                            target_kcal=t_cal,
-                            likes_text=profile.get("likes_text", ""),
-                            dislikes_text=profile.get("dislikes_text", ""),
-                        )
-                    if advice:
-                        st.success(f"🎉 **{len(advice)} rekomendasi** dari Gemini:")
-                        for i, item in enumerate(advice, 1):
-                            with st.container(border=True):
-                                st.markdown(f"**{i}. {item['suggestion']}**")
-                                st.caption(item["reason"])
-                                st.metric("~Kalori", f"{item['estimated_calories']} kkal")
-                    else:
-                        st.error("⚠️ Gagal mendapat saran. Cek API Key atau koneksi internet.")
+            st.info("Belum ada catatan hari ini. Gunakan input di atas untuk memulai.")
 
-    # ── Weight log ────────────────────────────────────────────────────────────
-    with st.expander("⚖️ Log Berat Badan"):
-        with st.container(border=True):
-            bb_val = st.number_input(
-                "Berat hari ini (kg):", min_value=30.0, max_value=200.0,
-                value=float(profile["weight"]), step=0.1,
-            )
-            if st.button("💾 Simpan Berat", use_container_width=True, key="save_weight"):
-                database.log_weight(today_str, bb_val)
-                st.success("✅ Berat badan berhasil dicatat!")
-                st.rerun()
+        st.divider()
+
+        # ── AI Bulking Advisor ────────────────────────────────────────────────
+        with st.expander("🤖 Saran Bulking dari Gemini"):
+            if not status["configured"]:
+                st.warning("⚠️ Perlu `GEMINI_API_KEY` di file `.env`.")
+            else:
+                st.caption(f"Defisit hari ini: **{remaining:.0f} kkal**")
+                if profile.get("likes_text"):
+                    st.caption(
+                        f"🟢 Preferensi Anda: "
+                        f"_{profile['likes_text'][:70]}{'...' if len(profile.get('likes_text','')) > 70 else ''}_"
+                    )
+                if st.button("✨ Generate Saran Personal", type="primary",
+                             use_container_width=True, key="advisor_btn"):
+                    if remaining <= 50:
+                        st.success("🎉 Target kalori hampir terpenuhi hari ini! Pertahankan.")
+                    else:
+                        with st.spinner("Gemini menyusun rekomendasi personal untuk Anda..."):
+                            advice = ai_client.get_bulking_advice(
+                                deficit_kcal=remaining,
+                                target_kcal=t_cal,
+                                likes_text=profile.get("likes_text", ""),
+                                dislikes_text=profile.get("dislikes_text", ""),
+                            )
+                        if advice:
+                            st.success(f"🎉 **{len(advice)} rekomendasi** dari Gemini:")
+                            for i, item in enumerate(advice, 1):
+                                with st.container(border=True):
+                                    st.markdown(f"**{i}. {item['suggestion']}**")
+                                    st.caption(item["reason"])
+                                    st.metric("~Kalori", f"{item['estimated_calories']} kkal")
+                        else:
+                            st.error("⚠️ Gagal mendapat saran. Cek API Key atau koneksi internet.")
+
+        # ── Weight log ────────────────────────────────────────────────────────
+        with st.expander("⚖️ Log Berat Badan"):
+            with st.container(border=True):
+                bb_val = st.number_input(
+                    "Berat hari ini (kg):", min_value=30.0, max_value=200.0,
+                    value=float(profile["weight"]), step=0.1,
+                )
+                if st.button("💾 Simpan Berat", use_container_width=True, key="save_weight"):
+                    database.log_weight(today_str, bb_val)
+                    st.success("✅ Berat badan berhasil dicatat!")
+                    st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
