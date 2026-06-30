@@ -1,0 +1,23 @@
+[theme]
+# Premium dark theme — optimized for OLED mobile screens & modern SaaS aesthetic.
+# Sapphire primary (#3B7DD8) on deep navy background (#0F172A).
+base                     = "dark"
+primaryColor             = "#3B7DD8"
+backgroundColor          = "#0F172A"
+secondaryBackgroundColor = "#1E293B"
+textColor                = "#F1F5F9"
+font                     = "sans serif"
+
+[server]
+# Required for cloud hosting (Streamlit Community Cloud sets headless automatically).
+headless             = true
+enableXsrfProtection = true
+maxUploadSize        = 5
+
+[browser]
+# Disable anonymous usage telemetry.
+gatherUsageStats = false
+
+[runner]
+# Disable magic commands for cleaner, explicit code.
+magicEnabled = false

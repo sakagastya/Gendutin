@@ -1,0 +1,38 @@
+# .gitignore — Gendutin
+# ─────────────────────────────────────────────────────────
+
+# ⚠️  SECRETS — Never commit these to version control
+.env
+.streamlit/secrets.toml
+
+# Python compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# SQLite database (local data — not shared)
+data/*.db
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE & editor artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini

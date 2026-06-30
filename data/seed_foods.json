@@ -1,0 +1,123 @@
+{
+  "foods": [
+    {
+      "name": "Dada Ayam Panggang (100g)",
+      "calories": 165.0,
+      "protein": 31.0,
+      "carbs": 0.0,
+      "fat": 3.6,
+      "category": "Protein Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Nasi Putih (1 Piring / 150g)",
+      "calories": 200.0,
+      "protein": 4.0,
+      "carbs": 44.0,
+      "fat": 0.4,
+      "category": "Carb Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Telur Rebus (1 Butir Besar)",
+      "calories": 78.0,
+      "protein": 6.3,
+      "carbs": 0.6,
+      "fat": 5.3,
+      "category": "Protein Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Alpukat (1 Buah Sedang / 150g)",
+      "calories": 240.0,
+      "protein": 3.0,
+      "carbs": 12.0,
+      "fat": 22.0,
+      "category": "Fat Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Susu Sapi Full Cream (1 Gelas / 250ml)",
+      "calories": 150.0,
+      "protein": 8.0,
+      "carbs": 12.0,
+      "fat": 8.0,
+      "category": "Liquid/Snack",
+      "is_liked": 0
+    },
+    {
+      "name": "Tempe Goreng (2 Potong / 50g)",
+      "calories": 118.0,
+      "protein": 10.0,
+      "carbs": 4.5,
+      "fat": 8.8,
+      "category": "Protein Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Selai Kacang (2 Sendok Makan / 32g)",
+      "calories": 188.0,
+      "protein": 8.0,
+      "carbs": 6.0,
+      "fat": 16.0,
+      "category": "Fat Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Roti Gandum (2 Lembar)",
+      "calories": 140.0,
+      "protein": 6.0,
+      "carbs": 24.0,
+      "fat": 2.0,
+      "category": "Carb Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Oats / Havermut (1 Mangkuk / 50g)",
+      "calories": 190.0,
+      "protein": 7.0,
+      "carbs": 33.0,
+      "fat": 3.0,
+      "category": "Carb Source",
+      "is_liked": 0
+    },
+    {
+      "name": "Daging Sapi Giling (100g)",
+      "calories": 250.0,
+      "protein": 26.0,
+      "carbs": 0.0,
+      "fat": 15.0,
+      "category": "Protein Source",
+      "is_liked": 0
+    }
+  ],
+  "recipes": [
+    {
+      "name": "Bulking Oatmeal Surprise",
+      "ingredients": ["Oats / Havermut (1 Mangkuk / 50g)", "Susu Sapi Full Cream (1 Gelas / 250ml)", "Selai Kacang (2 Sendok Makan / 32g)"],
+      "instructions": "Seduh oats dengan susu sapi hangat, lalu campurkan selai kacang. Hiasi dengan irisan pisang di atasnya.",
+      "calories": 528,
+      "protein": 23.0,
+      "carbs": 51.0,
+      "fat": 27.0
+    },
+    {
+      "name": "Sandwich Bulking Tinggi Protein",
+      "ingredients": ["Roti Gandum (2 Lembar)", "Dada Ayam Panggang (100g)", "Telur Rebus (1 Butir Besar)"],
+      "instructions": "Panggang roti gandum, selipkan dada ayam suwir dan telur rebus yang diiris tipis.",
+      "calories": 383,
+      "protein": 43.3,
+      "carbs": 24.6,
+      "fat": 10.9
+    },
+    {
+      "name": "Nasi Gila Bulking Sehat",
+      "ingredients": ["Nasi Putih (1 Piring / 150g)", "Telur Rebus (1 Butir Besar)", "Daging Sapi Giling (100g)", "Tempe Goreng (2 Potong / 50g)"],
+      "instructions": "Tumis daging sapi giling dan tempe goreng hancur. Sajikan di atas nasi hangat bersama telur rebus.",
+      "calories": 646,
+      "protein": 46.3,
+      "carbs": 53.0,
+      "fat": 29.5
+    }
+  ]
+}
