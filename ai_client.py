@@ -251,6 +251,80 @@ Respond ONLY in this exact JSON format with no additional text:
         return None
 
 
+# ── Function 4: Generate Healthy Bulking Recipe ─────────────────────────────
+
+def generate_recipe(
+    ingredients: str,
+    api_key: str = "",
+) -> Optional[Dict[str, Any]]:
+    """
+    Buat resep masakan sehat untuk bulking berdasarkan bahan-bahan yang tersedia.
+
+    Args:
+        ingredients: Daftar bahan-bahan yang tersedia (teks bebas).
+        api_key:     Gemini API key dari session state pengguna.
+
+    Returns dict dengan keys: recipe_name, servings, instructions,
+    total_calories, total_protein_g, total_carbs_g, total_fat_g,
+    ingredients_used — atau None jika API gagal.
+    """
+    prompt = f"""Anda adalah chef sekaligus ahli gizi bulking berpengalaman di Indonesia.
+
+Pengguna memiliki bahan-bahan berikut:
+{ingredients}
+
+Buat SATU resep masakan sehat yang:
+1. Cocok untuk program bulking (tinggi kalori & protein)
+2. Menggunakan bahan-bahan yang tersedia di atas
+3. Mudah dibuat di rumah (tidak perlu alat dapur canggih)
+4. Menggunakan bumbu dapur umum Indonesia yang bisa diasumsikan ada
+5. Lezat dan mengenyangkan
+
+Hitung kandungan gizi total resep tersebut secara akurat.
+
+Jawab HANYA dalam format JSON berikut tanpa teks tambahan apapun:
+{{
+  "recipe_name": "Nama Resep dalam Bahasa Indonesia",
+  "servings": 1,
+  "ingredients_used": ["100g bahan1", "2 butir bahan2"],
+  "instructions": "Langkah 1: ...\\nLangkah 2: ...\\nLangkah 3: ...",
+  "total_calories": 520,
+  "total_protein_g": 35.0,
+  "total_carbs_g": 48.0,
+  "total_fat_g": 14.0
+}}"""
+
+    raw_response = _call_gemini_api(
+        "gemini-2.5-flash", prompt, api_key=api_key, is_json=True, temperature=0.4
+    )
+    if not raw_response:
+        return None
+
+    try:
+        data = json.loads(raw_response.strip())
+        required_str = ["recipe_name", "instructions"]
+        required_num = ["total_calories", "total_protein_g", "total_carbs_g", "total_fat_g"]
+        required_lst = ["ingredients_used"]
+        for key in required_str + required_num + required_lst:
+            if key not in data:
+                return None
+        for key in required_num:
+            if not isinstance(data[key], (int, float)) or data[key] < 0:
+                return None
+        return {
+            "recipe_name":     str(data["recipe_name"]),
+            "servings":        int(data.get("servings", 1)),
+            "ingredients_used": [str(i) for i in data["ingredients_used"]],
+            "instructions":    str(data["instructions"]),
+            "total_calories":  float(data["total_calories"]),
+            "total_protein_g": float(data["total_protein_g"]),
+            "total_carbs_g":   float(data["total_carbs_g"]),
+            "total_fat_g":     float(data["total_fat_g"]),
+        }
+    except Exception:
+        return None
+
+
 # ── Utility ───────────────────────────────────────────────────────────────────
 
 def api_status(api_key: str = "") -> dict:

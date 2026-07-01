@@ -100,26 +100,34 @@ def _plot_macro_bar(targets, consumed, labels):
 
 
 # ── Session state ─────────────────────────────────────────────────────
-_SS_DEFAULTS = {"ai_preview": None, "ai_activity_result": None, "user_gemini_key": ""}
+_SS_DEFAULTS = {
+    "ai_preview":         None,
+    "ai_activity_result": None,
+    "user_gemini_key":    "",
+    "recipe_result":      None,
+}
 for k, v in _SS_DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Load API key from browser's local storage to persist across page refreshes
+# ── localStorage: load saved API key at startup (before any UI renders) ──────
 from streamlit_local_storage import _st_local_storage
-_stored_data = None
-_need_rerun  = False
+_ls_need_rerun = False
 try:
-    _stored_data = _st_local_storage(method="getAll", key="gendutin_local_storage", default={})
-    if isinstance(_stored_data, dict) and "user_gemini_key" in _stored_data:
-        _stored_val = _stored_data["user_gemini_key"]
-        if _stored_val and _stored_val.strip() and st.session_state.user_gemini_key != _stored_val:
-            st.session_state.user_gemini_key = _stored_val
-            _need_rerun = True
+    _ls_val = _st_local_storage(
+        method="getItem",
+        itemKey="user_gemini_key",
+        key="ls_read_api_key",
+        default=None,
+    )
+    if _ls_val and isinstance(_ls_val, str) and _ls_val.strip():
+        if not st.session_state.user_gemini_key:
+            st.session_state.user_gemini_key = _ls_val.strip()
+            _ls_need_rerun = True
 except Exception:
     pass
-if _need_rerun:
-    st.rerun()
+if _ls_need_rerun:
+    st.rerun()   # ↩ outside try/except so RerunException is never swallowed
 
 profile   = database.get_user_profile()
 _user_key = st.session_state.user_gemini_key
@@ -132,7 +140,6 @@ if status["configured"]:
     h2.success("AI ✅")
 else:
     h2.warning("🔑 ⚠️")
-st.caption("AI-Powered Bulking Tracker · Gemini 2.5 Flash")
 st.divider()
 
 # ── 3-Tab mobile navigation ───────────────────────────────────────────────────
@@ -152,7 +159,7 @@ with tab_insights:
             st.write(
                 "Sepertinya ini pertama kali Anda menggunakan app ini. "
                 "Buka tab **👤 Lifestyle Setup** untuk mengisi data fisik dan "
-                "gaya hidup Anda — Gemini akan menghitung target kalori secara otomatis."
+                "gaya hidup Anda — AI akan menghitung target kalori secara otomatis."
             )
             st.info(
                 "💡 Setelah profil tersimpan, kembali ke tab ini untuk melihat "
@@ -388,8 +395,8 @@ with tab_quicklog:
 
         if not status["configured"]:
             st.warning(
-                "🔒 **Fitur AI terkunci.** Masukkan Gemini API key pribadi Anda "
-                "di tab **👤 Lifestyle Setup** untuk mengaktifkan pelacakan makro dinamis."
+                "🔒 **Fitur AI terkunci.** Masukkan API key di tab "
+                "**👤 Lifestyle Setup** untuk mengaktifkan pelacakan makro dinamis."
             )
         else:
             food_input = st.text_input(
@@ -399,11 +406,11 @@ with tab_quicklog:
                 label_visibility="collapsed",
             )
 
-            if st.button("✨ Analisis & Estimasi via Gemini", type="primary", use_container_width=True):
+            if st.button("✨ Analisis & Estimasi Makanan", type="primary", use_container_width=True):
                 if not food_input.strip():
                     st.warning("Tulis dulu makanan atau minuman Anda di atas.")
                 else:
-                    with st.spinner("Gemini sedang menganalisis kandungan gizi makanan Anda..."):
+                    with st.spinner("Menganalisis kandungan gizi makanan Anda..."):
                         result = ai_client.estimate_food_nutrition(food_input, api_key=_user_key)
                     if result:
                         st.session_state.ai_preview = result
@@ -470,8 +477,122 @@ with tab_quicklog:
 
         st.divider()
 
+        # ── Weight log ─────────────────────────────────────────────────────
+        with st.expander("⚖️ Log Berat Badan"):
+            with st.container(border=True):
+                bb_val = st.number_input(
+                    "Berat hari ini (kg):", min_value=30.0, max_value=200.0,
+                    value=float(profile["weight"]), step=0.1,
+                )
+                if st.button("💾 Simpan Berat", use_container_width=True, key="save_weight"):
+                    database.log_weight(today_str, bb_val)
+                    st.success("✅ Berat badan berhasil dicatat!")
+                    st.rerun()
+
+        # ── Recipe Generator ────────────────────────────────────────────────
+        with st.expander("🍳 Generator Resep Bulking"):
+            if not status["configured"]:
+                st.warning(
+                    "🔒 **Fitur terkunci.** Masukkan API key di tab "
+                    "**👤 Lifestyle Setup** untuk membuat resep."
+                )
+            else:
+                st.caption(
+                    "Tulis bahan-bahan yang kamu punya — AI akan meracik "
+                    "resep bulking sehat beserta info kalori & makronya."
+                )
+                recipe_ingredients = st.text_area(
+                    "Bahan yang tersedia:",
+                    placeholder=(
+                        "cth: 3 telur, 100g tempe, nasi putih, susu UHT 200ml, "
+                        "minyak goreng, bawang putih, kecap manis..."
+                    ),
+                    height=100,
+                    key="recipe_ingredients",
+                    label_visibility="collapsed",
+                )
+                if st.button(
+                    "🍳 Buat Resep Sekarang",
+                    type="primary",
+                    use_container_width=True,
+                    key="generate_recipe_btn",
+                ):
+                    if not recipe_ingredients.strip():
+                        st.warning("Tulis dulu bahan-bahan yang kamu punya di atas.")
+                    else:
+                        with st.spinner("Meracik resep terbaik untuk bulking Anda..."):
+                            recipe = ai_client.generate_recipe(
+                                recipe_ingredients, api_key=_user_key
+                            )
+                        if recipe:
+                            st.session_state.recipe_result = recipe
+                        else:
+                            st.error(
+                                "⚠️ Gagal membuat resep. Coba sebutkan bahan "
+                                "lebih spesifik atau cek koneksi internet."
+                            )
+
+                # ── Recipe result card ────────────────────────────────────
+                if st.session_state.recipe_result:
+                    rec = st.session_state.recipe_result
+                    with st.container(border=True):
+                        st.markdown(f"### 🍳 {rec['recipe_name']}")
+                        st.caption(f"_Untuk {rec['servings']} porsi_")
+
+                        st.markdown("**Bahan-bahan:**")
+                        for ing in rec["ingredients_used"]:
+                            st.markdown(f"  • {ing}")
+
+                        st.markdown("**Cara Memasak:**")
+                        for step in rec["instructions"].split("\n"):
+                            if step.strip():
+                                st.markdown(step.strip())
+
+                        st.divider()
+                        st.markdown("**📊 Info Gizi per Porsi:**")
+                        rn1, rn2, rn3, rn4 = st.columns(4)
+                        rn1.metric("🔥 Kalori",  f"{rec['total_calories']:.0f} kkal")
+                        rn2.metric("🥩 Protein", f"{rec['total_protein_g']:.1f} g")
+                        rn3.metric("🍞 Karbo",   f"{rec['total_carbs_g']:.1f} g")
+                        rn4.metric("🥑 Lemak",   f"{rec['total_fat_g']:.1f} g")
+
+                        rc1, rc2 = st.columns(2)
+                        if rc1.button(
+                            "✅ Log Resep Ini", type="primary",
+                            use_container_width=True, key="log_recipe_btn"
+                        ):
+                            database.add_custom_food(
+                                rec["recipe_name"],
+                                rec["total_calories"],
+                                rec["total_protein_g"],
+                                rec["total_carbs_g"],
+                                rec["total_fat_g"],
+                                "Recipe Generator",
+                            )
+                            conn   = database.get_connection()
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                "SELECT id FROM foods WHERE name = ?",
+                                (rec["recipe_name"],)
+                            )
+                            row = cursor.fetchone()
+                            conn.close()
+                            if row:
+                                database.log_food_consumption(today_str, row["id"], 1.0)
+                                st.session_state.recipe_result = None
+                                st.success("✅ Resep dicatat ke log hari ini!")
+                                st.rerun()
+                            else:
+                                st.error("Gagal menyimpan ke database. Coba lagi.")
+
+                        if rc2.button(
+                            "✖ Tutup", use_container_width=True, key="close_recipe_btn"
+                        ):
+                            st.session_state.recipe_result = None
+                            st.rerun()
+
         # ── AI Bulking Advisor ────────────────────────────────────────────────
-        with st.expander("🤖 Saran Bulking dari Gemini"):
+        with st.expander("🤖 Saran Bulking Hari Ini"):
             if not status["configured"]:
                 st.warning("🔒 Fitur ini membutuhkan API key. Buka tab **👤 Lifestyle Setup** untuk menambahkannya.")
             else:
@@ -486,7 +607,7 @@ with tab_quicklog:
                     if remaining <= 50:
                         st.success("🎉 Target kalori hampir terpenuhi hari ini! Pertahankan.")
                     else:
-                        with st.spinner("Gemini menyusun rekomendasi personal untuk Anda..."):
+                        with st.spinner("Menyusun rekomendasi personal untuk Anda..."):
                             advice = ai_client.get_bulking_advice(
                                 deficit_kcal=remaining,
                                 target_kcal=t_cal,
@@ -495,7 +616,7 @@ with tab_quicklog:
                                 api_key=_user_key,
                             )
                         if advice:
-                            st.success(f"🎉 **{len(advice)} rekomendasi** dari Gemini:")
+                            st.success(f"🎉 **{len(advice)} rekomendasi** untukmu:")
                             for i, item in enumerate(advice, 1):
                                 with st.container(border=True):
                                     st.markdown(f"**{i}. {item['suggestion']}**")
@@ -612,7 +733,7 @@ with tab_setup:
     if status["configured"] and activity_description.strip():
         if st.button("🤖 Analisis Aktivitas via AI", use_container_width=True,
                      key="analyze_activity"):
-            with st.spinner("Gemini sedang menganalisis pola aktivitas Anda..."):
+            with st.spinner("Menganalisis pola aktivitas Anda..."):
                 ai_act = ai_client.extract_activity_multiplier(
                     activity_description, api_key=_user_key
                 )
