@@ -83,10 +83,18 @@ def _plot_macro_bar(targets, consumed, labels):
     ax.bar([i + w / 2 for i in x], consumed, w, color="#3B7DD8", alpha=0.92, label="Dikonsumsi")
     ax.set_xticks(list(x))
     ax.set_xticklabels(labels, fontsize=9)
-    ax.tick_params(axis="y", labelsize=8)
-    ax.legend(frameon=False, fontsize=8)
+    
+    # Custom high-contrast styling for dark mode
+    ax.tick_params(axis="both", colors="#F8FAFC", labelsize=8)
+    ax.grid(True, color="#475569", linestyle=":", alpha=0.6)
+    leg = ax.legend(frameon=False, fontsize=8)
+    for text in leg.get_texts():
+        text.set_color("#F8FAFC")
+        
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#475569")
+    ax.spines["bottom"].set_color("#475569")
     plt.tight_layout()
     st.pyplot(fig)
 
@@ -242,14 +250,22 @@ with tab_insights:
             ax.set_facecolor("none")
             colors = ["#3B7DD8" if c > 0 else "#E2E8F0" for c in df["calories"]]
             ax.bar(df["label"], df["calories"], color=colors, alpha=0.9, width=0.6)
-            ax.axhline(t_cal, color="#94A3B8", linestyle="--", linewidth=1.5,
+            ax.axhline(t_cal, color="#F43F5E", linestyle="--", linewidth=1.5,
                        label=f"Target {t_cal:.0f} kkal")
-            ax.set_ylabel("Kalori (kkal)", fontsize=9)
-            ax.tick_params(axis="x", labelsize=8, rotation=25)
-            ax.tick_params(axis="y", labelsize=8)
-            ax.legend(frameon=False, fontsize=8)
+            ax.set_ylabel("Kalori (kkal)", fontsize=9, color="#F8FAFC")
+            
+            # Custom high-contrast styling for dark mode
+            ax.tick_params(axis="x", colors="#F8FAFC", labelsize=8, rotation=25)
+            ax.tick_params(axis="y", colors="#F8FAFC", labelsize=8)
+            ax.grid(True, color="#475569", linestyle=":", alpha=0.6)
+            leg = ax.legend(frameon=False, fontsize=8)
+            for text in leg.get_texts():
+                text.set_color("#F8FAFC")
+                
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
+            ax.spines["left"].set_color("#475569")
+            ax.spines["bottom"].set_color("#475569")
             plt.tight_layout()
             st.pyplot(fig)
 
@@ -282,15 +298,23 @@ with tab_insights:
             ax.set_facecolor("none")
             ax.fill_between(df["date"], df["calories"], alpha=0.12, color="#3B7DD8")
             ax.plot(df["date"], df["calories"], color="#3B7DD8", linewidth=2)
-            ax.axhline(t_cal, color="#94A3B8", linestyle="--", linewidth=1.5, label="Target")
+            ax.axhline(t_cal, color="#F43F5E", linestyle="--", linewidth=1.5, label="Target")
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
             ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
-            ax.tick_params(axis="x", labelsize=8, rotation=30)
-            ax.tick_params(axis="y", labelsize=8)
-            ax.set_ylabel("Kalori (kkal)", fontsize=9)
-            ax.legend(frameon=False, fontsize=8)
+            ax.set_ylabel("Kalori (kkal)", fontsize=9, color="#F8FAFC")
+            
+            # Custom high-contrast styling for dark mode
+            ax.tick_params(axis="x", colors="#F8FAFC", labelsize=8, rotation=30)
+            ax.tick_params(axis="y", colors="#F8FAFC", labelsize=8)
+            ax.grid(True, color="#475569", linestyle=":", alpha=0.6)
+            leg = ax.legend(frameon=False, fontsize=8)
+            for text in leg.get_texts():
+                text.set_color("#F8FAFC")
+                
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
+            ax.spines["left"].set_color("#475569")
+            ax.spines["bottom"].set_color("#475569")
             plt.tight_layout()
             st.pyplot(fig)
 
