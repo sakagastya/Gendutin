@@ -163,16 +163,23 @@ with tab_insights:
             pct        = min(1.0, total_cal / t_cal) if t_cal > 0 else 0.0
 
             with st.container(border=True):
-                st.markdown(f"### 🔥 {total_cal:.0f} / {t_cal:.0f} kkal")
+                st.markdown("### 📊 Ringkasan Progress Harian")
+                col_t, col_e, col_r = st.columns(3)
+                with col_t:
+                    st.metric("🎯 Target", f"{t_cal:.0f} kkal")
+                with col_e:
+                    st.metric("🍕 Dikonsumsi", f"{total_cal:.0f} kkal")
+                with col_r:
+                    st.metric("🔥 Sisa", f"{remaining:.0f} kkal")
+                
                 st.progress(pct)
                 delta_val = total_cal - t_cal
                 st.caption(
                     f"**{pct*100:.1f}% tercapai** &nbsp;·&nbsp; "
-                    f"Sisa: **{remaining:.0f} kkal** &nbsp;·&nbsp; "
                     f"Delta: {'%+.0f' % delta_val} kkal"
                 )
 
-            mc1, mc2 = st.columns(2)
+            mc1, mc2, mc3 = st.columns(3)
             with mc1:
                 with st.container(border=True):
                     st.metric("🥩 Protein", f"{total_prot:.1f}g",
@@ -181,14 +188,10 @@ with tab_insights:
                 with st.container(border=True):
                     st.metric("🍞 Karbo", f"{total_carb:.1f}g",
                               delta=f"{total_carb - t_carb:+.1f}g", delta_color="inverse")
-            mc3, mc4 = st.columns(2)
             with mc3:
                 with st.container(border=True):
                     st.metric("🥑 Lemak", f"{total_fat:.1f}g",
                               delta=f"{total_fat - t_fat:+.1f}g", delta_color="inverse")
-            with mc4:
-                with st.container(border=True):
-                    st.metric("🎯 Sisa", f"{remaining:.0f} kkal")
 
             with st.expander("📊 Grafik Makro Harian"):
                 _plot_macro_bar(
