@@ -625,17 +625,7 @@ with tab_quicklog:
                         else:
                             st.error("⚠️ Gagal mendapat saran. Cek API Key atau koneksi internet.")
 
-        # ── Weight log ────────────────────────────────────────────────────────
-        with st.expander("⚖️ Log Berat Badan"):
-            with st.container(border=True):
-                bb_val = st.number_input(
-                    "Berat hari ini (kg):", min_value=30.0, max_value=200.0,
-                    value=float(profile["weight"]), step=0.1,
-                )
-                if st.button("💾 Simpan Berat", use_container_width=True, key="save_weight"):
-                    database.log_weight(today_str, bb_val)
-                    st.success("✅ Berat badan berhasil dicatat!")
-                    st.rerun()
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
