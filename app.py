@@ -105,29 +105,55 @@ _SS_DEFAULTS = {
     "ai_activity_result": None,
     "user_gemini_key":    "",
     "recipe_result":      None,
+    "ls_loaded":          False,
+    "ls_pending_key":     None,
+    "ls_pending_delete":  False,
 }
 for k, v in _SS_DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ── localStorage: load saved API key at startup (before any UI renders) ──────
+# ── Handle pending localStorage operations ──
 from streamlit_local_storage import _st_local_storage
-_ls_need_rerun = False
-try:
-    _stored_data = _st_local_storage(
-        method="getAll",
-        key="gendutin_local_storage",
-        default={},
+
+if st.session_state.ls_pending_key is not None:
+    _st_local_storage(
+        method="setItem",
+        itemKey="user_gemini_key",
+        itemValue=st.session_state.ls_pending_key,
+        key="save_user_gemini_key",
     )
-    if isinstance(_stored_data, dict) and "user_gemini_key" in _stored_data:
-        _stored_val = _stored_data["user_gemini_key"]
-        if _stored_val and _stored_val.strip() and st.session_state.user_gemini_key != _stored_val:
-            st.session_state.user_gemini_key = _stored_val.strip()
+    st.session_state.ls_pending_key = None
+
+elif st.session_state.ls_pending_delete:
+    _st_local_storage(
+        method="deleteItem",
+        itemKey="user_gemini_key",
+        key="delete_user_gemini_key",
+    )
+    st.session_state.ls_pending_delete = False
+
+# ── Load from localStorage at startup (only once) ──
+if not st.session_state.ls_loaded:
+    _ls_need_rerun = False
+    try:
+        _stored_data = _st_local_storage(
+            method="getAll",
+            key="gendutin_local_storage",
+            default=None,
+        )
+        if _stored_data is not None:
+            if isinstance(_stored_data, dict) and "user_gemini_key" in _stored_data:
+                _stored_val = _stored_data["user_gemini_key"]
+                if _stored_val and isinstance(_stored_val, str) and _stored_val.strip():
+                    st.session_state.user_gemini_key = _stored_val.strip()
+            st.session_state.ls_loaded = True
             _ls_need_rerun = True
-except Exception:
-    pass
-if _ls_need_rerun:
-    st.rerun()   # ↩ outside try/except so RerunException is never swallowed
+    except Exception:
+        st.session_state.ls_loaded = True
+        
+    if _ls_need_rerun:
+        st.rerun()
 
 profile   = database.get_user_profile()
 _user_key = st.session_state.user_gemini_key
@@ -647,10 +673,7 @@ with tab_setup:
             kc1.success("🔑 API Key aktif — fitur AI diaktifkan.")
             if kc2.button("Ganti", use_container_width=True, key="change_key_btn"):
                 st.session_state.user_gemini_key = ""
-                try:
-                    _st_local_storage(method="deleteItem", itemKey="user_gemini_key", key="delete_user_gemini_key")
-                except Exception:
-                    pass
+                st.session_state.ls_pending_delete = True
                 st.rerun()
     else:
         st.markdown("#### 🔑 API Key")
@@ -670,13 +693,10 @@ with tab_setup:
             )
             if key_input != st.session_state.user_gemini_key:
                 st.session_state.user_gemini_key = key_input
-                try:
-                    if not key_input.strip():
-                        _st_local_storage(method="deleteItem", itemKey="user_gemini_key", key="delete_user_gemini_key")
-                    else:
-                        _st_local_storage(method="setItem", itemKey="user_gemini_key", itemValue=key_input, key="save_user_gemini_key")
-                except Exception:
-                    pass
+                if not key_input.strip():
+                    st.session_state.ls_pending_delete = True
+                else:
+                    st.session_state.ls_pending_key = key_input
                 st.rerun()
             st.warning("⚠️ Masukkan API key di atas untuk mengaktifkan fitur AI.")
 
