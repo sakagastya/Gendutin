@@ -105,6 +105,18 @@ for k, v in _SS_DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+# Load API key from browser's local storage to persist across page refreshes
+from streamlit_local_storage import _st_local_storage
+try:
+    stored_data = _st_local_storage(method="getAll", key="gendutin_local_storage", default={})
+    if isinstance(stored_data, dict) and "user_gemini_key" in stored_data:
+        stored_val = stored_data["user_gemini_key"]
+        if stored_val and stored_val.strip() and st.session_state.user_gemini_key != stored_val:
+            st.session_state.user_gemini_key = stored_val
+            st.rerun()
+except Exception:
+    pass
+
 profile   = database.get_user_profile()
 _user_key = st.session_state.user_gemini_key
 status    = ai_client.api_status(_user_key)
@@ -529,6 +541,13 @@ with tab_setup:
         )
         if key_input != st.session_state.user_gemini_key:
             st.session_state.user_gemini_key = key_input
+            try:
+                if not key_input.strip():
+                    _st_local_storage(method="deleteItem", itemKey="user_gemini_key", key="delete_user_gemini_key")
+                else:
+                    _st_local_storage(method="setItem", itemKey="user_gemini_key", itemValue=key_input, key="save_user_gemini_key")
+            except Exception:
+                pass
             st.rerun()
         if ai_client.is_key_valid(st.session_state.user_gemini_key):
             st.success("✅ API Key aktif — semua fitur AI diaktifkan.")
