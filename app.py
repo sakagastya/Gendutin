@@ -236,38 +236,45 @@ with tab_insights:
                            delta=f"{avg_cal - t_cal:+.0f} vs target", delta_color="inverse")
                 wc2.metric("Hari Aktif Log", f"{hari_aktif} / 7 hari")
 
-            wa1, wa2 = st.columns(2)
+            # 3-column macro averages (Protein, Carbs, Fats)
+            wa1, wa2, wa3 = st.columns(3)
             with wa1:
                 with st.container(border=True):
                     st.metric("🥩 Avg Protein", f"{df['protein'].mean():.1f}g")
             with wa2:
                 with st.container(border=True):
                     st.metric("🍞 Avg Karbo", f"{df['carbs'].mean():.1f}g")
+            with wa3:
+                with st.container(border=True):
+                    st.metric("🥑 Avg Lemak", f"{df['fat'].mean():.1f}g")
 
-            plt.style.use("seaborn-v0_8-whitegrid")
-            fig, ax = plt.subplots(figsize=(5, 3))
-            fig.patch.set_alpha(0)
-            ax.set_facecolor("none")
-            colors = ["#3B7DD8" if c > 0 else "#E2E8F0" for c in df["calories"]]
-            ax.bar(df["label"], df["calories"], color=colors, alpha=0.9, width=0.6)
-            ax.axhline(t_cal, color="#F43F5E", linestyle="--", linewidth=1.5,
-                       label=f"Target {t_cal:.0f} kkal")
-            ax.set_ylabel("Kalori (kkal)", fontsize=9, color="#F8FAFC")
-            
-            # Custom high-contrast styling for dark mode
-            ax.tick_params(axis="x", colors="#F8FAFC", labelsize=8, rotation=25)
-            ax.tick_params(axis="y", colors="#F8FAFC", labelsize=8)
-            ax.grid(True, color="#475569", linestyle=":", alpha=0.6)
-            leg = ax.legend(frameon=False, fontsize=8)
-            for text in leg.get_texts():
-                text.set_color("#F8FAFC")
+            if hari_aktif == 0:
+                st.info("🍕 **Belum ada data logged minggu ini.** Catat makanan harian Anda di tab **🍕 Quick Log** untuk melihat grafiknya!")
+            else:
+                plt.style.use("seaborn-v0_8-whitegrid")
+                fig, ax = plt.subplots(figsize=(5.5, 3.2))
+                fig.patch.set_alpha(0)
+                ax.set_facecolor("none")
+                colors = ["#3B7DD8" if c > 0 else "#E2E8F0" for c in df["calories"]]
+                ax.bar(df["label"], df["calories"], color=colors, alpha=0.9, width=0.6)
+                ax.axhline(t_cal, color="#F43F5E", linestyle="--", linewidth=1.5,
+                           label=f"Target {t_cal:.0f} kkal")
+                ax.set_ylabel("Kalori (kkal)", fontsize=9, color="#F8FAFC")
                 
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
-            ax.spines["left"].set_color("#475569")
-            ax.spines["bottom"].set_color("#475569")
-            plt.tight_layout()
-            st.pyplot(fig)
+                # Custom high-contrast styling for dark mode with increased rotation for date labels
+                ax.tick_params(axis="x", colors="#F8FAFC", labelsize=8, rotation=30)
+                ax.tick_params(axis="y", colors="#F8FAFC", labelsize=8)
+                ax.grid(True, color="#475569", linestyle=":", alpha=0.6)
+                leg = ax.legend(frameon=False, fontsize=8)
+                for text in leg.get_texts():
+                    text.set_color("#F8FAFC")
+                    
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+                ax.spines["left"].set_color("#475569")
+                ax.spines["bottom"].set_color("#475569")
+                plt.tight_layout()
+                st.pyplot(fig)
 
         # ═══════════════════════ BULANAN ═════════════════════════════════════════
         elif period == "Bulanan 🗓️":
@@ -292,31 +299,34 @@ with tab_insights:
                            delta=f"{avg_cal - t_cal:+.0f} vs target", delta_color="inverse")
                 mc2.metric("Hari Aktif Log", f"{active_days} / 30 hari")
 
-            plt.style.use("seaborn-v0_8-whitegrid")
-            fig, ax = plt.subplots(figsize=(5, 3))
-            fig.patch.set_alpha(0)
-            ax.set_facecolor("none")
-            ax.fill_between(df["date"], df["calories"], alpha=0.12, color="#3B7DD8")
-            ax.plot(df["date"], df["calories"], color="#3B7DD8", linewidth=2)
-            ax.axhline(t_cal, color="#F43F5E", linestyle="--", linewidth=1.5, label="Target")
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
-            ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
-            ax.set_ylabel("Kalori (kkal)", fontsize=9, color="#F8FAFC")
-            
-            # Custom high-contrast styling for dark mode
-            ax.tick_params(axis="x", colors="#F8FAFC", labelsize=8, rotation=30)
-            ax.tick_params(axis="y", colors="#F8FAFC", labelsize=8)
-            ax.grid(True, color="#475569", linestyle=":", alpha=0.6)
-            leg = ax.legend(frameon=False, fontsize=8)
-            for text in leg.get_texts():
-                text.set_color("#F8FAFC")
+            if active_days <= 1:
+                st.info("📈 **Log a few more days to see your progress line soar!** Catat makanan Anda secara rutin untuk melihat visualisasi tren bulanan Anda di sini.")
+            else:
+                plt.style.use("seaborn-v0_8-whitegrid")
+                fig, ax = plt.subplots(figsize=(5.5, 3.2))
+                fig.patch.set_alpha(0)
+                ax.set_facecolor("none")
+                ax.fill_between(df["date"], df["calories"], alpha=0.12, color="#3B7DD8")
+                ax.plot(df["date"], df["calories"], color="#3B7DD8", linewidth=2)
+                ax.axhline(t_cal, color="#F43F5E", linestyle="--", linewidth=1.5, label="Target")
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
+                ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+                ax.set_ylabel("Kalori (kkal)", fontsize=9, color="#F8FAFC")
                 
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
-            ax.spines["left"].set_color("#475569")
-            ax.spines["bottom"].set_color("#475569")
-            plt.tight_layout()
-            st.pyplot(fig)
+                # Custom high-contrast styling for dark mode
+                ax.tick_params(axis="x", colors="#F8FAFC", labelsize=8, rotation=30)
+                ax.tick_params(axis="y", colors="#F8FAFC", labelsize=8)
+                ax.grid(True, color="#475569", linestyle=":", alpha=0.6)
+                leg = ax.legend(frameon=False, fontsize=8)
+                for text in leg.get_texts():
+                    text.set_color("#F8FAFC")
+                    
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+                ax.spines["left"].set_color("#475569")
+                ax.spines["bottom"].set_color("#475569")
+                plt.tight_layout()
+                st.pyplot(fig)
 
         # ── Weight trend — always visible at bottom of Insights ──────────────────
         st.divider()
