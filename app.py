@@ -114,15 +114,15 @@ for k, v in _SS_DEFAULTS.items():
 from streamlit_local_storage import _st_local_storage
 _ls_need_rerun = False
 try:
-    _ls_val = _st_local_storage(
-        method="getItem",
-        itemKey="user_gemini_key",
-        key="ls_read_api_key",
-        default=None,
+    _stored_data = _st_local_storage(
+        method="getAll",
+        key="gendutin_local_storage",
+        default={},
     )
-    if _ls_val and isinstance(_ls_val, str) and _ls_val.strip():
-        if not st.session_state.user_gemini_key:
-            st.session_state.user_gemini_key = _ls_val.strip()
+    if isinstance(_stored_data, dict) and "user_gemini_key" in _stored_data:
+        _stored_val = _stored_data["user_gemini_key"]
+        if _stored_val and _stored_val.strip() and st.session_state.user_gemini_key != _stored_val:
+            st.session_state.user_gemini_key = _stored_val.strip()
             _ls_need_rerun = True
 except Exception:
     pass
