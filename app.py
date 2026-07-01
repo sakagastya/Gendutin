@@ -36,7 +36,7 @@ import base64 as _b64
 _PWA_MANIFEST = {
     "name":             "Gendutin – AI Bulking Tracker",
     "short_name":       "Gendutin",
-    "description":      "AI-powered weight gain & macro tracker. Powered by Gemini 2.5 Flash.",
+    "description":      "Healthy bulking & macro tracker. Catat makanan dan pantau progresmu setiap hari.",
     "start_url":        "/",
     "display":          "standalone",
     "orientation":      "portrait-primary",
@@ -66,7 +66,7 @@ st.markdown(f"""
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color"                           content="#3B7DD8">
 <meta name="description"
-      content="AI-powered weight gain macro tracker powered by Gemini 2.5 Flash.">
+      content="Healthy bulking & macro tracker — catat makanan dan pantau progresmu setiap hari.">
 """, unsafe_allow_html=True)
 
 
@@ -107,15 +107,19 @@ for k, v in _SS_DEFAULTS.items():
 
 # Load API key from browser's local storage to persist across page refreshes
 from streamlit_local_storage import _st_local_storage
+_stored_data = None
+_need_rerun  = False
 try:
-    stored_data = _st_local_storage(method="getAll", key="gendutin_local_storage", default={})
-    if isinstance(stored_data, dict) and "user_gemini_key" in stored_data:
-        stored_val = stored_data["user_gemini_key"]
-        if stored_val and stored_val.strip() and st.session_state.user_gemini_key != stored_val:
-            st.session_state.user_gemini_key = stored_val
-            st.rerun()
+    _stored_data = _st_local_storage(method="getAll", key="gendutin_local_storage", default={})
+    if isinstance(_stored_data, dict) and "user_gemini_key" in _stored_data:
+        _stored_val = _stored_data["user_gemini_key"]
+        if _stored_val and _stored_val.strip() and st.session_state.user_gemini_key != _stored_val:
+            st.session_state.user_gemini_key = _stored_val
+            _need_rerun = True
 except Exception:
     pass
+if _need_rerun:
+    st.rerun()
 
 profile   = database.get_user_profile()
 _user_key = st.session_state.user_gemini_key
@@ -524,34 +528,45 @@ with tab_setup:
     )
 
     # ── Personal Gemini API Key ────────────────────────────────────────────────
-    st.markdown("#### 🔑 Gemini API Key Pribadi")
-    st.caption(
-        "Key Anda hanya tersimpan di session browser ini dan tidak pernah dikirim "
-        "ke server kami. Dapatkan key gratis di "
-        "[aistudio.google.com](https://aistudio.google.com/app/apikey)."
-    )
-    with st.container(border=True):
-        key_input = st.text_input(
-            "Masukkan Gemini API Key Anda:",
-            value=st.session_state.user_gemini_key,
-            type="password",
-            placeholder="AIzaSy...",
-            key="gemini_key_input",
-            label_visibility="collapsed",
-        )
-        if key_input != st.session_state.user_gemini_key:
-            st.session_state.user_gemini_key = key_input
-            try:
-                if not key_input.strip():
+    _key_active = ai_client.is_key_valid(st.session_state.user_gemini_key)
+    if _key_active:
+        # Key already loaded — show a clean, minimal confirmation; hide the input
+        with st.container(border=True):
+            kc1, kc2 = st.columns([3, 1])
+            kc1.success("🔑 API Key aktif — fitur AI diaktifkan.")
+            if kc2.button("Ganti", use_container_width=True, key="change_key_btn"):
+                st.session_state.user_gemini_key = ""
+                try:
                     _st_local_storage(method="deleteItem", itemKey="user_gemini_key", key="delete_user_gemini_key")
-                else:
-                    _st_local_storage(method="setItem", itemKey="user_gemini_key", itemValue=key_input, key="save_user_gemini_key")
-            except Exception:
-                pass
-            st.rerun()
-        if ai_client.is_key_valid(st.session_state.user_gemini_key):
-            st.success("✅ API Key aktif — semua fitur AI diaktifkan.")
-        else:
+                except Exception:
+                    pass
+                st.rerun()
+    else:
+        st.markdown("#### 🔑 API Key")
+        st.caption(
+            "Masukkan API key Anda untuk mengaktifkan semua fitur. "
+            "Key disimpan di browser — tidak dikirim ke server. Dapatkan gratis di "
+            "[aistudio.google.com](https://aistudio.google.com/app/apikey)."
+        )
+        with st.container(border=True):
+            key_input = st.text_input(
+                "API Key:",
+                value=st.session_state.user_gemini_key,
+                type="password",
+                placeholder="AIzaSy...",
+                key="gemini_key_input",
+                label_visibility="collapsed",
+            )
+            if key_input != st.session_state.user_gemini_key:
+                st.session_state.user_gemini_key = key_input
+                try:
+                    if not key_input.strip():
+                        _st_local_storage(method="deleteItem", itemKey="user_gemini_key", key="delete_user_gemini_key")
+                    else:
+                        _st_local_storage(method="setItem", itemKey="user_gemini_key", itemValue=key_input, key="save_user_gemini_key")
+                except Exception:
+                    pass
+                st.rerun()
             st.warning("⚠️ Masukkan API key di atas untuk mengaktifkan fitur AI.")
 
     st.divider()
@@ -579,7 +594,7 @@ with tab_setup:
 
     # ── AI Activity Profiler — replaces rigid dropdown ────────────────────────
     st.markdown("#### 🏃 Gaya Hidup & Aktivitas Fisik")
-    st.caption("Tulis dalam bahasa bebas. Gemini akan menentukan multiplier TDEE yang paling akurat.")
+    st.caption("Tulis dalam bahasa bebas. AI akan menentukan kebutuhan kalori yang paling akurat untuk Anda.")
 
     activity_description = st.text_area(
         "Ceritakan aktivitas harian Anda:",
