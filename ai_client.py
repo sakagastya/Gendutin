@@ -1,87 +1,75 @@
 # ai_client.py — Gendutin AI Layer
 # Menggunakan Gemini REST API via requests. Kompatibel Python 3.8+.
-# Secrets: st.secrets (Streamlit Cloud) → .env file (local dev fallback).
+# Architecture: Per-user API key, passed from UI session state.
+# Tidak ada server-side secrets, tidak ada .env reading.
+# Setiap user menyediakan key mereka sendiri dari antarmuka aplikasi.
 
-import os
 import json
 import requests
 from typing import Optional, List, Dict, Any
-from dotenv import load_dotenv
-
-load_dotenv()  # No-op on Cloud; loads .env for local dev only.
 
 
-def _get_api_key() -> str:
-    """
-    Mengambil Gemini API key dengan urutan prioritas:
-    1. st.secrets["GEMINI_API_KEY"]  — Streamlit Community Cloud (secrets dashboard)
-    2. os.getenv("GEMINI_API_KEY")   — Local .env file (fallback untuk dev lokal)
-    """
-    # Priority 1: Streamlit Cloud secrets (tidak error jika st belum init)
-    try:
-        import streamlit as _st
-        key = _st.secrets.get("GEMINI_API_KEY", "")
-        if key and key.strip() and key.strip() != "your_api_key_here":
-            return key.strip()
-    except Exception:
-        pass
-    # Priority 2: local .env / system environment variable
-    return os.getenv("GEMINI_API_KEY", "").strip()
+# ── Key Validation ─────────────────────────────────────────────────────────────
 
-
-def _is_configured() -> bool:
-    """Returns True jika API key valid dan sudah dikonfigurasi dengan benar."""
-    key = _get_api_key()
+def is_key_valid(api_key: str) -> bool:
+    """Returns True jika api_key non-empty dan bukan placeholder string."""
+    key = (api_key or "").strip()
     return bool(key) and key != "your_api_key_here"
 
 
-def _call_gemini_api(model_name: str, prompt: str, is_json: bool = False, temperature: float = 0.7) -> Optional[str]:
+# ── Core REST caller ───────────────────────────────────────────────────────────
+
+def _call_gemini_api(
+    model_name: str,
+    prompt: str,
+    api_key: str,
+    is_json: bool = False,
+    temperature: float = 0.7,
+) -> Optional[str]:
     """Memanggil Gemini REST API secara langsung menggunakan requests."""
-    if not _is_configured():
+    if not is_key_valid(api_key):
         return None
 
-    api_key = _get_api_key()
-    # Menggunakan v1beta endpoint
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-    
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": prompt
-                    }
-                ]
-            }
-        ],
-        "generationConfig": {
-            "temperature": temperature
-        }
+    key = api_key.strip()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+
+    payload: Dict[str, Any] = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": temperature},
     }
-    
+
     if is_json:
         payload["generationConfig"]["responseMimeType"] = "application/json"
-        
+
     try:
-        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=15)
+        response = requests.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=20,
+        )
         response.raise_for_status()
         data = response.json()
-        
-        # Ekstrak teks dari respons Gemini
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        return text
+        return data["candidates"][0]["content"]["parts"][0]["text"]
     except Exception:
         return None
 
 
 # ── Function 1: Estimate Food Nutrition ───────────────────────────────────────
 
-def estimate_food_nutrition(food_description: str) -> Optional[Dict[str, Any]]:
+def estimate_food_nutrition(
+    food_description: str,
+    api_key: str = "",
+) -> Optional[Dict[str, Any]]:
     """
     Estimasi kandungan nutrisi dari deskripsi makanan bebas menggunakan Gemini REST API.
 
+    Args:
+        food_description: Teks bebas deskripsi makanan (e.g. "semangkuk bakso sapi 10 biji").
+        api_key: Gemini API key dari session state pengguna.
+
     Returns dict dengan keys: food_name, calories, protein_g, carbs_g, fat_g,
-    serving_description — atau None jika API gagal.
+    serving_description — atau None jika API gagal / key tidak valid.
     """
     prompt = f"""Anda adalah ahli gizi bersertifikat. Estimasikan kandungan nutrisi untuk makanan/minuman berikut dalam porsi yang disebutkan. Gunakan data gizi standar Indonesia. Jika jumlah tidak disebutkan, asumsikan 1 porsi standar.
 
@@ -97,15 +85,14 @@ Jawab HANYA dalam format JSON berikut tanpa teks tambahan apapun:
   "serving_description": "deskripsi porsi yang dimaksud"
 }}"""
 
-    # Menggunakan gemini-2.5-flash yang aktif dan stabil
-    raw_response = _call_gemini_api("gemini-2.5-flash", prompt, is_json=True, temperature=0.1)
+    raw_response = _call_gemini_api(
+        "gemini-2.5-flash", prompt, api_key=api_key, is_json=True, temperature=0.1
+    )
     if not raw_response:
         return None
-        
+
     try:
         data = json.loads(raw_response.strip())
-        
-        # Validasi field wajib
         required_numeric = ["calories", "protein_g", "carbs_g", "fat_g"]
         for key in ["food_name", "serving_description"] + required_numeric:
             if key not in data:
@@ -113,7 +100,6 @@ Jawab HANYA dalam format JSON berikut tanpa teks tambahan apapun:
         for key in required_numeric:
             if not isinstance(data[key], (int, float)) or data[key] < 0:
                 return None
-                
         return {
             "food_name":           str(data["food_name"]),
             "calories":            float(data["calories"]),
@@ -133,10 +119,18 @@ def get_bulking_advice(
     target_kcal: float,
     likes_text: str = "",
     dislikes_text: str = "",
+    api_key: str = "",
 ) -> Optional[List[Dict[str, Any]]]:
     """
     Rekomendasikan 3-5 makanan/snack bulking yang dipersonalisasi berdasarkan
-    defisit kalori pengguna hari ini dan preferensi makanan bebas mereka menggunakan Gemini REST API.
+    defisit kalori pengguna hari ini dan preferensi makanan bebas mereka.
+
+    Args:
+        deficit_kcal: Kalori yang masih perlu dipenuhi hari ini.
+        target_kcal:  Target kalori harian pengguna.
+        likes_text:   Makanan favorit (teks bebas).
+        dislikes_text: Makanan yang tidak disukai (teks bebas).
+        api_key:      Gemini API key dari session state pengguna.
 
     Returns list of dicts dengan keys: suggestion, reason, estimated_calories
     — atau None jika API gagal.
@@ -168,15 +162,16 @@ Jawab HANYA dalam format JSON array berikut tanpa teks tambahan:
   }}
 ]"""
 
-    raw_response = _call_gemini_api("gemini-2.5-flash", prompt, is_json=True, temperature=0.7)
+    raw_response = _call_gemini_api(
+        "gemini-2.5-flash", prompt, api_key=api_key, is_json=True, temperature=0.7
+    )
     if not raw_response:
         return None
-        
+
     try:
         data = json.loads(raw_response.strip())
         if not isinstance(data, list) or len(data) == 0:
             return None
-            
         valid = []
         for item in data:
             if all(k in item for k in ["suggestion", "reason", "estimated_calories"]):
@@ -197,10 +192,17 @@ Jawab HANYA dalam format JSON array berikut tanpa teks tambahan:
 
 # ── Function 3: Extract Activity Multiplier from Natural Language ─────────────
 
-def extract_activity_multiplier(description: str) -> Optional[Dict[str, Any]]:
+def extract_activity_multiplier(
+    description: str,
+    api_key: str = "",
+) -> Optional[Dict[str, Any]]:
     """
     Analisis deskripsi aktivitas harian dalam teks bebas dan ekstrak
     multiplier TDEE yang tepat untuk kalkulasi kebutuhan kalori.
+
+    Args:
+        description: Deskripsi gaya hidup / aktivitas dalam bahasa bebas.
+        api_key:     Gemini API key dari session state pengguna.
 
     Returns dict dengan keys: activity_level, multiplier, explanation
     — atau None jika API gagal.
@@ -225,7 +227,9 @@ Respond ONLY in this exact JSON format with no additional text:
   "explanation": "One concise sentence explaining your classification based on their specific description."
 }}"""
 
-    raw_response = _call_gemini_api("gemini-2.5-flash", prompt, is_json=True, temperature=0.1)
+    raw_response = _call_gemini_api(
+        "gemini-2.5-flash", prompt, api_key=api_key, is_json=True, temperature=0.1
+    )
     if not raw_response:
         return None
 
@@ -249,14 +253,19 @@ Respond ONLY in this exact JSON format with no additional text:
 
 # ── Utility ───────────────────────────────────────────────────────────────────
 
-def api_status() -> dict:
-    """Returns status konfigurasi API untuk ditampilkan di UI sidebar."""
-    configured = _is_configured()
+def api_status(api_key: str = "") -> dict:
+    """
+    Returns status konfigurasi API untuk ditampilkan di header UI.
+
+    Args:
+        api_key: Gemini API key dari st.session_state.user_gemini_key.
+    """
+    configured = is_key_valid(api_key)
     return {
         "configured": configured,
         "message": (
             "Gemini API terhubung"
             if configured
-            else "GEMINI_API_KEY belum dikonfigurasi di file .env"
+            else "API key belum dimasukkan — buka tab Lifestyle Setup"
         ),
     }

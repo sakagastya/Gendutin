@@ -91,21 +91,23 @@ def _plot_macro_bar(targets, consumed, labels):
     st.pyplot(fig)
 
 
-# ── Session state ──────────────────────────────────────────────────────────────
-for k, v in {"ai_preview": None, "ai_activity_result": None}.items():
+# ── Session state ─────────────────────────────────────────────────────
+_SS_DEFAULTS = {"ai_preview": None, "ai_activity_result": None, "user_gemini_key": ""}
+for k, v in _SS_DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-profile = database.get_user_profile()
-status  = ai_client.api_status()
+profile   = database.get_user_profile()
+_user_key = st.session_state.user_gemini_key
+status    = ai_client.api_status(_user_key)
 
-# ── Compact header ─────────────────────────────────────────────────────────────
+# ── Compact header ─────────────────────────────────────────────────────
 h1, h2 = st.columns([4, 1])
 h1.markdown("## 🏋️ Gendutin")
 if status["configured"]:
     h2.success("AI ✅")
 else:
-    h2.warning("AI ⚠️")
+    h2.warning("🔑 ⚠️")
 st.caption("AI-Powered Bulking Tracker · Gemini 2.5 Flash")
 st.divider()
 
@@ -146,7 +148,7 @@ with tab_insights:
         )
         st.divider()
 
-        # ═══════════════════════ HARIAN ══════════════════════════════════════════
+        # ═══════════════════════ HARIAN ══════════════════════════════════════
         if period == "Harian 📅":
             selected_date = st.date_input(
                 "Tanggal:", today, label_visibility="collapsed"
@@ -160,7 +162,6 @@ with tab_insights:
             remaining  = max(0.0, t_cal - total_cal)
             pct        = min(1.0, total_cal / t_cal) if t_cal > 0 else 0.0
 
-            # Hero progress card
             with st.container(border=True):
                 st.markdown(f"### 🔥 {total_cal:.0f} / {t_cal:.0f} kkal")
                 st.progress(pct)
@@ -171,32 +172,134 @@ with tab_insights:
                     f"Delta: {'%+.0f' % delta_val} kkal"
                 )
 
-            # 2×2 macro metric cards
             mc1, mc2 = st.columns(2)
-        ax.set_facecolor("none")
-        ax.fill_between(df["date"], df["calories"], alpha=0.12, color="#3B7DD8")
-        ax.plot(df["date"], df["calories"], color="#3B7DD8", linewidth=2)
-        ax.axhline(t_cal, color="#94A3B8", linestyle="--", linewidth=1.5, label="Target")
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
-        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
-        ax.tick_params(axis="x", labelsize=8, rotation=30)
-        ax.tick_params(axis="y", labelsize=8)
-        ax.set_ylabel("Kalori (kkal)", fontsize=9)
-        ax.legend(frameon=False, fontsize=8)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        plt.tight_layout()
-        st.pyplot(fig)
+            with mc1:
+                with st.container(border=True):
+                    st.metric("🥩 Protein", f"{total_prot:.1f}g",
+                              delta=f"{total_prot - t_prot:+.1f}g", delta_color="inverse")
+            with mc2:
+                with st.container(border=True):
+                    st.metric("🍞 Karbo", f"{total_carb:.1f}g",
+                              delta=f"{total_carb - t_carb:+.1f}g", delta_color="inverse")
+            mc3, mc4 = st.columns(2)
+            with mc3:
+                with st.container(border=True):
+                    st.metric("🥑 Lemak", f"{total_fat:.1f}g",
+                              delta=f"{total_fat - t_fat:+.1f}g", delta_color="inverse")
+            with mc4:
+                with st.container(border=True):
+                    st.metric("🎯 Sisa", f"{remaining:.0f} kkal")
 
-    # ── Weight trend — always visible at bottom of Insights ──────────────────
-    st.divider()
-    with st.expander("⚖️ Tren Berat Badan"):
-        wlogs = database.get_weight_logs()
-        if wlogs:
-            df_w = pd.DataFrame(wlogs).set_index("date")
-            st.line_chart(df_w["weight"])
-        else:
-            st.info("Belum ada data berat badan. Log berat dari tab **🍕 Quick Log**.")
+            with st.expander("📊 Grafik Makro Harian"):
+                _plot_macro_bar(
+                    targets=[t_prot,     t_carb,     t_fat],
+                    consumed=[total_prot, total_carb, total_fat],
+                    labels=["Protein", "Karbo", "Lemak"],
+                )
+
+        # ═══════════════════════ MINGGUAN ════════════════════════════════════════
+        elif period == "Mingguan 📆":
+            dates = [
+                (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+                for i in range(6, -1, -1)
+            ]
+            daily_data = []
+            for d in dates:
+                logs_d = database.get_daily_logs(d)
+                daily_data.append({
+                    "date":     d,
+                    "label":    datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a %d"),
+                    "calories": sum(l["calories"] for l in logs_d),
+                    "protein":  sum(l["protein"]  for l in logs_d),
+                    "carbs":    sum(l["carbs"]    for l in logs_d),
+                    "fat":      sum(l["fat"]       for l in logs_d),
+                })
+            df         = pd.DataFrame(daily_data)
+            avg_cal    = df["calories"].mean()
+            hari_aktif = int((df["calories"] > 0).sum())
+
+            with st.container(border=True):
+                st.markdown("### 📆 7 Hari Terakhir")
+                wc1, wc2 = st.columns(2)
+                wc1.metric("Rata-rata Kalori", f"{avg_cal:.0f} kkal",
+                           delta=f"{avg_cal - t_cal:+.0f} vs target", delta_color="inverse")
+                wc2.metric("Hari Aktif Log", f"{hari_aktif} / 7 hari")
+
+            wa1, wa2 = st.columns(2)
+            with wa1:
+                with st.container(border=True):
+                    st.metric("🥩 Avg Protein", f"{df['protein'].mean():.1f}g")
+            with wa2:
+                with st.container(border=True):
+                    st.metric("🍞 Avg Karbo", f"{df['carbs'].mean():.1f}g")
+
+            plt.style.use("seaborn-v0_8-whitegrid")
+            fig, ax = plt.subplots(figsize=(5, 3))
+            fig.patch.set_alpha(0)
+            ax.set_facecolor("none")
+            colors = ["#3B7DD8" if c > 0 else "#E2E8F0" for c in df["calories"]]
+            ax.bar(df["label"], df["calories"], color=colors, alpha=0.9, width=0.6)
+            ax.axhline(t_cal, color="#94A3B8", linestyle="--", linewidth=1.5,
+                       label=f"Target {t_cal:.0f} kkal")
+            ax.set_ylabel("Kalori (kkal)", fontsize=9)
+            ax.tick_params(axis="x", labelsize=8, rotation=25)
+            ax.tick_params(axis="y", labelsize=8)
+            ax.legend(frameon=False, fontsize=8)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            plt.tight_layout()
+            st.pyplot(fig)
+
+        # ═══════════════════════ BULANAN ═════════════════════════════════════════
+        elif period == "Bulanan 🗓️":
+            dates = [
+                (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+                for i in range(29, -1, -1)
+            ]
+            daily_data = []
+            for d in dates:
+                logs_d = database.get_daily_logs(d)
+                daily_data.append({"date": d, "calories": sum(l["calories"] for l in logs_d)})
+
+            df          = pd.DataFrame(daily_data)
+            df["date"]  = pd.to_datetime(df["date"])
+            avg_cal     = df["calories"].mean()
+            active_days = int((df["calories"] > 0).sum())
+
+            with st.container(border=True):
+                st.markdown("### 🗓️ 30 Hari Terakhir")
+                mc1, mc2 = st.columns(2)
+                mc1.metric("Rata-rata Kalori", f"{avg_cal:.0f} kkal",
+                           delta=f"{avg_cal - t_cal:+.0f} vs target", delta_color="inverse")
+                mc2.metric("Hari Aktif Log", f"{active_days} / 30 hari")
+
+            plt.style.use("seaborn-v0_8-whitegrid")
+            fig, ax = plt.subplots(figsize=(5, 3))
+            fig.patch.set_alpha(0)
+            ax.set_facecolor("none")
+            ax.fill_between(df["date"], df["calories"], alpha=0.12, color="#3B7DD8")
+            ax.plot(df["date"], df["calories"], color="#3B7DD8", linewidth=2)
+            ax.axhline(t_cal, color="#94A3B8", linestyle="--", linewidth=1.5, label="Target")
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
+            ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+            ax.tick_params(axis="x", labelsize=8, rotation=30)
+            ax.tick_params(axis="y", labelsize=8)
+            ax.set_ylabel("Kalori (kkal)", fontsize=9)
+            ax.legend(frameon=False, fontsize=8)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            plt.tight_layout()
+            st.pyplot(fig)
+
+        # ── Weight trend — always visible at bottom of Insights ──────────────────
+        st.divider()
+        with st.expander("⚖️ Tren Berat Badan"):
+            wlogs = database.get_weight_logs()
+            if wlogs:
+                df_w = pd.DataFrame(wlogs).set_index("date")
+                st.line_chart(df_w["weight"])
+            else:
+                st.info("Belum ada data berat badan. Log berat dari tab **🍕 Quick Log**.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -227,13 +330,13 @@ with tab_quicklog:
             )
             st.progress(pct)
 
-        # ── AI Food Entry — single free-form text, zero dropdowns ─────────────
+        # ── AI Food Entry ───────────────────────────────────────────────────
         st.subheader("🍕 Apa yang kamu makan?")
 
         if not status["configured"]:
             st.warning(
-                "⚠️ Tambahkan `GEMINI_API_KEY` di file `.env` "
-                "untuk mengaktifkan AI food logging."
+                "🔒 **Fitur AI terkunci.** Masukkan Gemini API key pribadi Anda "
+                "di tab **👤 Lifestyle Setup** untuk mengaktifkan pelacakan makro dinamis."
             )
         else:
             food_input = st.text_input(
@@ -248,7 +351,7 @@ with tab_quicklog:
                     st.warning("Tulis dulu makanan atau minuman Anda di atas.")
                 else:
                     with st.spinner("Gemini sedang menganalisis kandungan gizi makanan Anda..."):
-                        result = ai_client.estimate_food_nutrition(food_input)
+                        result = ai_client.estimate_food_nutrition(food_input, api_key=_user_key)
                     if result:
                         st.session_state.ai_preview = result
                     else:
@@ -317,7 +420,7 @@ with tab_quicklog:
         # ── AI Bulking Advisor ────────────────────────────────────────────────
         with st.expander("🤖 Saran Bulking dari Gemini"):
             if not status["configured"]:
-                st.warning("⚠️ Perlu `GEMINI_API_KEY` di file `.env`.")
+                st.warning("🔒 Fitur ini membutuhkan API key. Buka tab **👤 Lifestyle Setup** untuk menambahkannya.")
             else:
                 st.caption(f"Defisit hari ini: **{remaining:.0f} kkal**")
                 if profile.get("likes_text"):
@@ -336,6 +439,7 @@ with tab_quicklog:
                                 target_kcal=t_cal,
                                 likes_text=profile.get("likes_text", ""),
                                 dislikes_text=profile.get("dislikes_text", ""),
+                                api_key=_user_key,
                             )
                         if advice:
                             st.success(f"🎉 **{len(advice)} rekomendasi** dari Gemini:")
@@ -370,7 +474,33 @@ with tab_setup:
         "AI akan menghitung kebutuhan kalori sejati Anda."
     )
 
-    # ── Physical data ─────────────────────────────────────────────────────────
+    # ── Personal Gemini API Key ────────────────────────────────────────────────
+    st.markdown("#### 🔑 Gemini API Key Pribadi")
+    st.caption(
+        "Key Anda hanya tersimpan di session browser ini dan tidak pernah dikirim "
+        "ke server kami. Dapatkan key gratis di "
+        "[aistudio.google.com](https://aistudio.google.com/app/apikey)."
+    )
+    with st.container(border=True):
+        key_input = st.text_input(
+            "Masukkan Gemini API Key Anda:",
+            value=st.session_state.user_gemini_key,
+            type="password",
+            placeholder="AIzaSy...",
+            key="gemini_key_input",
+            label_visibility="collapsed",
+        )
+        if key_input != st.session_state.user_gemini_key:
+            st.session_state.user_gemini_key = key_input
+            st.rerun()
+        if ai_client.is_key_valid(st.session_state.user_gemini_key):
+            st.success("✅ API Key aktif — semua fitur AI diaktifkan.")
+        else:
+            st.warning("⚠️ Masukkan API key di atas untuk mengaktifkan fitur AI.")
+
+    st.divider()
+
+    # ── Physical data ─────────────────────────────────────────────────────
     st.markdown("#### 📐 Data Fisik")
     nama   = st.text_input("Nama Lengkap", value=profile["name"] if profile else "User")
     umur   = st.number_input("Umur (Tahun)", min_value=5, max_value=100,
@@ -407,19 +537,21 @@ with tab_setup:
         label_visibility="collapsed",
     )
 
-    # AI Analyze button — only shown if API is configured and text is non-empty
+    # AI Analyze button — only shown if key valid and text is non-empty
     if status["configured"] and activity_description.strip():
         if st.button("🤖 Analisis Aktivitas via AI", use_container_width=True,
                      key="analyze_activity"):
             with st.spinner("Gemini sedang menganalisis pola aktivitas Anda..."):
-                ai_act = ai_client.extract_activity_multiplier(activity_description)
+                ai_act = ai_client.extract_activity_multiplier(
+                    activity_description, api_key=_user_key
+                )
             if ai_act:
                 st.session_state.ai_activity_result = ai_act
                 st.rerun()
             else:
                 st.error("⚠️ Gagal menganalisis. Coba deskripsikan lebih spesifik.")
     elif not status["configured"]:
-        st.info("💡 Tambahkan `GEMINI_API_KEY` untuk mengaktifkan AI activity analysis.")
+        st.info("💡 Masukkan API Key di atas untuk mengaktifkan AI activity analysis.")
     else:
         st.caption("_Tulis deskripsi aktivitas di atas lalu klik tombol Analisis._")
 
