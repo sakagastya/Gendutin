@@ -830,6 +830,12 @@ with tab_setup:
             "activity_description": activity_description,
             "activity_multiplier":  multiplier,
         })
+        # Log starting weight to weight_logs to initialize the weight trend chart
+        try:
+            init_date = datetime.date.today().strftime("%Y-%m-%d")
+            database.log_weight(init_date, berat)
+        except Exception:
+            pass
         st.session_state.ai_activity_result = None
         st.success(
             f"🎉 Profil tersimpan! Target kalori: **{macros['target_calories']:.0f} kkal/hari** "

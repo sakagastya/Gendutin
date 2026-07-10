@@ -234,6 +234,13 @@ def add_custom_food(name, calories, protein, carbs, fat, category):
         cursor.execute('''
         INSERT INTO foods (name, calories, protein, carbs, fat, category, is_custom)
         VALUES (?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(name) DO UPDATE SET
+            calories = excluded.calories,
+            protein = excluded.protein,
+            carbs = excluded.carbs,
+            fat = excluded.fat,
+            category = excluded.category,
+            is_custom = 1
         ''', (name, calories, protein, carbs, fat, category))
         conn.commit()
         success = True
@@ -298,6 +305,49 @@ def log_weight(date_str, weight):
     ''', (date_str, weight))
     conn.commit()
     conn.close()
+    
+    # Update latest user profile with the new weight and recalculated targets
+    profile = get_user_profile()
+    if profile:
+        import engine
+        multiplier = profile.get("activity_multiplier", 0.0)
+        if multiplier and multiplier > 0:
+            macros = engine.hitung_target_makro_dari_multiplier(
+                weight,
+                profile["height"],
+                profile["age"],
+                profile["gender"],
+                multiplier
+            )
+        else:
+            macros = engine.hitung_target_makro(
+                weight,
+                profile["height"],
+                profile["age"],
+                profile["gender"],
+                profile.get("activity_level", "Moderately Active")
+            )
+            
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+        UPDATE user_profile
+        SET weight = ?,
+            target_calories = ?,
+            target_protein = ?,
+            target_carbs = ?,
+            target_fat = ?
+        WHERE id = ?
+        ''', (
+            weight,
+            macros["target_calories"],
+            macros["target_protein"],
+            macros["target_carbs"],
+            macros["target_fat"],
+            profile["id"]
+        ))
+        conn.commit()
+        conn.close()
 
 def get_weight_logs():
     conn = get_connection()
