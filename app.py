@@ -108,6 +108,16 @@ _SS_DEFAULTS = {
     "ls_loaded":          False,
     "ls_pending_key":     None,
     "ls_pending_delete":  False,
+    "db_profile":         None,
+    "db_daily_logs":      [],
+    "db_weight_logs":     [],
+    "db_custom_foods":    [],
+    "db_food_preferences": {},
+    "ls_pending_profile": None,
+    "ls_pending_daily_logs": None,
+    "ls_pending_weight_logs": None,
+    "ls_pending_custom_foods": None,
+    "ls_pending_food_prefs": None,
 }
 for k, v in _SS_DEFAULTS.items():
     if k not in st.session_state:
@@ -133,6 +143,53 @@ elif st.session_state.ls_pending_delete:
     )
     st.session_state.ls_pending_delete = False
 
+# Sync mock-db variables to localStorage
+if st.session_state.ls_pending_profile is not None:
+    _st_local_storage(
+        method="setItem",
+        itemKey="user_profile",
+        itemValue=_json.dumps(st.session_state.ls_pending_profile),
+        key="save_profile_state",
+    )
+    st.session_state.ls_pending_profile = None
+
+if st.session_state.ls_pending_daily_logs is not None:
+    _st_local_storage(
+        method="setItem",
+        itemKey="daily_logs",
+        itemValue=_json.dumps(st.session_state.ls_pending_daily_logs),
+        key="save_daily_logs_state",
+    )
+    st.session_state.ls_pending_daily_logs = None
+
+if st.session_state.ls_pending_weight_logs is not None:
+    _st_local_storage(
+        method="setItem",
+        itemKey="weight_logs",
+        itemValue=_json.dumps(st.session_state.ls_pending_weight_logs),
+        key="save_weight_logs_state",
+    )
+    st.session_state.ls_pending_weight_logs = None
+
+if st.session_state.ls_pending_custom_foods is not None:
+    _st_local_storage(
+        method="setItem",
+        itemKey="custom_foods",
+        itemValue=_json.dumps(st.session_state.ls_pending_custom_foods),
+        key="save_custom_foods_state",
+    )
+    st.session_state.ls_pending_custom_foods = None
+
+if st.session_state.ls_pending_food_prefs is not None:
+    _st_local_storage(
+        method="setItem",
+        itemKey="food_preferences",
+        itemValue=_json.dumps(st.session_state.ls_pending_food_prefs),
+        key="save_food_prefs_state",
+    )
+    st.session_state.ls_pending_food_prefs = None
+
+
 # ── Load from localStorage at startup (only once) ──
 if not st.session_state.ls_loaded:
     _ls_need_rerun = False
@@ -143,10 +200,58 @@ if not st.session_state.ls_loaded:
             default=None,
         )
         if _stored_data is not None:
-            if isinstance(_stored_data, dict) and "user_gemini_key" in _stored_data:
-                _stored_val = _stored_data["user_gemini_key"]
-                if _stored_val and isinstance(_stored_val, str) and _stored_val.strip():
-                    st.session_state.user_gemini_key = _stored_val.strip()
+            if isinstance(_stored_data, dict):
+                # 1. Load Gemini Key
+                if "user_gemini_key" in _stored_data:
+                    _stored_val = _stored_data["user_gemini_key"]
+                    if _stored_val and isinstance(_stored_val, str) and _stored_val.strip():
+                        st.session_state.user_gemini_key = _stored_val.strip()
+                
+                # 2. Load User Profile
+                if "user_profile" in _stored_data:
+                    try:
+                        _profile_str = _stored_data["user_profile"]
+                        if _profile_str:
+                            st.session_state.db_profile = _json.loads(_profile_str)
+                    except:
+                        pass
+                
+                # 3. Load Daily Logs
+                if "daily_logs" in _stored_data:
+                    try:
+                        _logs_str = _stored_data["daily_logs"]
+                        if _logs_str:
+                            st.session_state.db_daily_logs = _json.loads(_logs_str)
+                    except:
+                        pass
+                
+                # 4. Load Weight Logs
+                if "weight_logs" in _stored_data:
+                    try:
+                        _wlogs_str = _stored_data["weight_logs"]
+                        if _wlogs_str:
+                            st.session_state.db_weight_logs = _json.loads(_wlogs_str)
+                    except:
+                        pass
+                
+                # 5. Load Custom Foods
+                if "custom_foods" in _stored_data:
+                    try:
+                        _foods_str = _stored_data["custom_foods"]
+                        if _foods_str:
+                            st.session_state.db_custom_foods = _json.loads(_foods_str)
+                    except:
+                        pass
+
+                # 6. Load Food Preferences
+                if "food_preferences" in _stored_data:
+                    try:
+                        _prefs_str = _stored_data["food_preferences"]
+                        if _prefs_str:
+                            st.session_state.db_food_preferences = _json.loads(_prefs_str)
+                    except:
+                        pass
+
             st.session_state.ls_loaded = True
             _ls_need_rerun = True
     except Exception:
