@@ -1,33 +1,51 @@
+# LEGACY — Gendutin has migrated from SQLite to session-state/localStorage
+# (see database.py). This standalone CLI can no longer see logs stored in the
+# user's browser, so it only supports old local databases and exits gracefully
+# otherwise.
 import sqlite3
 import datetime
 import os
+import sys
+
+# Windows console (cp1252) cannot encode the emojis used below.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'gendutin.db')
 
 def check_today_logs():
     today = datetime.date.today().strftime('%Y-%m-%d')
     if not os.path.exists(DB_FILE):
-        print("🚨 DATABASE ERROR: Database Gendutin belum diinisialisasi!")
+        print("ℹ️ Gendutin kini menyimpan log di browser (localStorage), bukan di SQLite.")
+        print("   Jalankan aplikasi Streamlit dan cek tab 📊 Insights untuk evaluasi harian.")
         return
-        
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    # Periksa profil aktif
-    cursor.execute("SELECT name FROM user_profile ORDER BY id DESC LIMIT 1")
-    user = cursor.fetchone()
-    user_name = user['name'] if user else "User"
-    
-    # Hitung jumlah makanan yang dicatat hari ini
-    cursor.execute("SELECT COUNT(*) as count FROM daily_logs WHERE date = ?", (today,))
-    food_count = cursor.fetchone()['count']
-    
-    # Hitung berat badan yang dicatat hari ini
-    cursor.execute("SELECT COUNT(*) as count FROM weight_logs WHERE date = ?", (today,))
-    weight_count = cursor.fetchone()['count']
-    
-    conn.close()
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Periksa profil aktif
+        cursor.execute("SELECT name FROM user_profile ORDER BY id DESC LIMIT 1")
+        user = cursor.fetchone()
+        user_name = user['name'] if user else "User"
+
+        # Hitung jumlah makanan yang dicatat hari ini
+        cursor.execute("SELECT COUNT(*) as count FROM daily_logs WHERE date = ?", (today,))
+        food_count = cursor.fetchone()['count']
+
+        # Hitung berat badan yang dicatat hari ini
+        cursor.execute("SELECT COUNT(*) as count FROM weight_logs WHERE date = ?", (today,))
+        weight_count = cursor.fetchone()['count']
+    except sqlite3.Error as e:
+        print(f"⚠️ Database lama tidak kompatibel ({e}).")
+        print("   Gendutin kini menyimpan log di browser (localStorage).")
+        print("   Jalankan aplikasi Streamlit dan cek tab 📊 Insights untuk evaluasi harian.")
+        return
+    finally:
+        if conn is not None:
+            conn.close()
     
     print("=" * 60)
     print(f"🕵️‍♂️ EVALUASI HARIAN BULKING UNTUK: {user_name.upper()} ({today})")

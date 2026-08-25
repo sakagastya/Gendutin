@@ -77,6 +77,20 @@ def get_all_foods(search="", show_preference=None):
                     
     return filtered
 
+def get_food_by_name(name):
+    """Case-insensitive lookup. Custom foods first (they shadow seed foods)."""
+    if not name:
+        return None
+    target = name.strip().lower()
+    custom_foods = st.session_state.get("db_custom_foods", [])
+    for f in custom_foods:
+        if f["name"].strip().lower() == target:
+            return f
+    for f in _DEFAULT_FOODS:
+        if f["name"].strip().lower() == target:
+            return f
+    return None
+
 def update_food_preference(food_id, is_liked):
     food = get_food_by_id(food_id)
     if food:
@@ -100,8 +114,8 @@ def add_custom_food(name, calories, protein, carbs, fat, category):
             st.session_state.ls_pending_custom_foods = custom_foods
             return True
             
-    # Add new
-    new_id = 10000 + len(custom_foods) + 1
+    # Add new (max-based ID so deletes never cause collisions)
+    new_id = max([f["id"] for f in custom_foods], default=10000) + 1
     new_food = {
         "id": new_id,
         "name": name,
@@ -130,7 +144,7 @@ def log_food_consumption(date_str, food_id, quantity):
     fat = food['fat'] * quantity
     
     logs = st.session_state.get("db_daily_logs", [])
-    log_id = len(logs) + 1
+    log_id = max([l["id"] for l in logs], default=0) + 1
     new_entry = {
         "id": log_id,
         "date": date_str,

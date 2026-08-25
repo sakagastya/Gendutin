@@ -570,17 +570,12 @@ with tab_quicklog:
                             r["food_name"], r["calories"],
                             r["protein_g"], r["carbs_g"], r["fat_g"], "AI Entry"
                         )
-                        conn   = database.get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT id FROM foods WHERE name = ?", (r["food_name"],))
-                        row    = cursor.fetchone()
-                        conn.close()
-                        if row:
-                            database.log_food_consumption(today_str, row["id"], 1.0)
+                        food = database.get_food_by_name(r["food_name"])
+                        if food and database.log_food_consumption(today_str, food["id"], 1.0):
                             st.session_state.ai_preview = None
                             st.rerun()
                         else:
-                            st.error("Gagal menyimpan ke database. Coba lagi.")
+                            st.error("Gagal menyimpan ke log. Coba lagi.")
 
                     if bc2.button("✖ Batal", use_container_width=True):
                         st.session_state.ai_preview = None
@@ -700,21 +695,13 @@ with tab_quicklog:
                                 rec["total_fat_g"],
                                 "Recipe Generator",
                             )
-                            conn   = database.get_connection()
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                "SELECT id FROM foods WHERE name = ?",
-                                (rec["recipe_name"],)
-                            )
-                            row = cursor.fetchone()
-                            conn.close()
-                            if row:
-                                database.log_food_consumption(today_str, row["id"], 1.0)
+                            food = database.get_food_by_name(rec["recipe_name"])
+                            if food and database.log_food_consumption(today_str, food["id"], 1.0):
                                 st.session_state.recipe_result = None
                                 st.success("✅ Resep dicatat ke log hari ini!")
                                 st.rerun()
                             else:
-                                st.error("Gagal menyimpan ke database. Coba lagi.")
+                                st.error("Gagal menyimpan ke log. Coba lagi.")
 
                         if rc2.button(
                             "✖ Tutup", use_container_width=True, key="close_recipe_btn"
